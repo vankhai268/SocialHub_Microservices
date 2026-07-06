@@ -1,7 +1,5 @@
 # SocialHub — Nền tảng Mạng Xã Hội Microservices
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
 > Nền tảng mạng xã hội cho phép người dùng kết nối, chia sẻ nội dung, nhắn tin realtime và tương tác trong thời gian thực. Xây dựng theo kiến trúc microservices với Domain-Driven Design.
 
 > **New to this repo?** See [`GETTING_STARTED.md`](GETTING_STARTED.md) for setup instructions, workflow guide, and submission checklist.
@@ -127,10 +125,3 @@ curl http://localhost:3000                 # Frontend
 | media-service | [`media-service.yaml`](docs/api-specs/media-service.yaml) |
 | notification-service | [`notification-service.yaml`](docs/api-specs/notification-service.yaml) |
 
----
-
-## License
-
-This project uses the [MIT License](LICENSE).
-
-> Template by [Hung Dang](https://github.com/hungdn1701) · [Template guide](GETTING_STARTED.md)
