@@ -1,0 +1,406 @@
+# =======================================================================
+# user-service — Complete Service Contract
+# =======================================================================
+# Bounded Context: Identity & Access
+# Responsibility: User registration, authentication (JWT), profile management, search
+# Database: PostgreSQL
+# Cache: Redis (profile cache, JWT blacklist)
+# =======================================================================
+
+openapi: 3.0.3
+
+info:
+  title: user-service — Identity & Access
+  description: |
+    Manages the complete user lifecycle: registration, authentication (JWT access + refresh tokens),
+    profile management, user search, and provides user data to other services via internal endpoints.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5001
+    description: Local development (direct)
+  - url: http://localhost:8080/api
+    description: Local development (via API Gateway)
+
+# =======================================================================
+# SECTION 1 — REST / HTTP endpoints
+# =======================================================================
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ── Authentication ─────────────────────────────────────────────────────
+
+  /auth/register:
+    post:
+      summary: Register a new user account
+      operationId: registerUser
+      tags: [Auth]
+      description: |
+        Creates a new user account with email, password, and display name.
+        Returns the created user profile along with JWT access and refresh tokens.
+        Password is hashed with bcrypt before storage.
+        Derived from: DDD 2.3 command "RegisterUser"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid request body (missing fields, weak password)
+        '409':
+          description: Email already exists
+
+  /auth/login:
+    post:
+      summary: Login with email and password
+      operationId: loginUser
+      tags: [Auth]
+      description: |
+        Authenticates user credentials and returns JWT access token (15 min TTL)
+        and refresh token (7 day TTL).
+        Derived from: DDD 2.3 command "LoginUser"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid email or password
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      operationId: refreshToken
+      tags: [Auth]
+      description: |
+        Uses a valid refresh token to generate a new access token.
+        The old refresh token is rotated (invalidated and replaced with a new one).
+        Derived from: DDD 2.3 command "RefreshToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '401':
+          description: Invalid or expired refresh token
+
+  /auth/logout:
+    post:
+      summary: Logout (blacklist current token)
+      operationId: logoutUser
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      description: |
+        Blacklists the current JWT access token in Redis (key: blacklist:{jti}, TTL = token remaining time).
+        Derived from: DDD 2.3 command "LogoutUser"
+      responses:
+        '200':
+          description: Logged out successfully
+        '401':
+          description: Not authenticated
+
+  # ── User Profile ────────────────────────────────────────────────────────
+
+  /users/{id}:
+    get:
+      summary: Get user profile by ID
+      operationId: getUserById
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      description: |
+        Returns public profile information for a user.
+        Result is cached in Redis (key: user:{userId}, TTL: 30 min).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '404':
+          description: User not found
+
+    put:
+      summary: Update user profile
+      operationId: updateProfile
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      description: |
+        Updates the authenticated user's profile. Only the profile owner can update.
+        Invalidates Redis cache for this user.
+        Derived from: DDD 2.3 command "UpdateProfile"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          description: Invalid request body
+        '403':
+          description: Can only update own profile
+        '404':
+          description: User not found
+
+  /users/search:
+    get:
+      summary: Search users by name or email
+      operationId: searchUsers
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      description: Search users by display name or email (partial match, case-insensitive).
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+          description: Search keyword (min 2 characters)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsers'
+
+  # ── Internal endpoints (service-to-service only) ────────────────────────
+
+  /users/batch:
+    post:
+      summary: Get multiple users by IDs (internal)
+      operationId: batchGetUsers
+      tags: [Internal]
+      description: |
+        Internal endpoint called by other services to resolve user information
+        in batch. Not exposed through the API Gateway.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userIds]
+              properties:
+                userIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  maxItems: 100
+      responses:
+        '200':
+          description: List of users (may contain fewer items if some IDs not found)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserProfile'
+
+# =======================================================================
+# Shared Schemas
+# =======================================================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    RegisterRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: SecureP@ss123
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 50
+          example: Nguyễn Văn A
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        tokens:
+          $ref: '#/components/schemas/TokenPair'
+
+    TokenPair:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (TTL 15 minutes)
+        refreshToken:
+          type: string
+          description: JWT refresh token (TTL 7 days)
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        bio:
+          type: string
+          maxLength: 500
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 50
+        bio:
+          type: string
+          maxLength: 500
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL from media-service presigned URL
+
+    PaginatedUsers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserProfile'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer

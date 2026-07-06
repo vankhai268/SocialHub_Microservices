@@ -6,7 +6,7 @@
 
 ## Where to document async events
 
-**Primary location: `service-a.yaml` (and `service-b.yaml`)**
+**Primary location: `<service-name>.yaml` (e.g., `chat-service.yaml`, `notification-service.yaml`)**
 
 Each service's YAML file contains an `x-async-events` extension block that documents the events the service publishes and consumes — in the same file as the REST and gRPC interface. Fill this in first.
 
@@ -97,10 +97,12 @@ Service A **does not wait** for Service B. Service B processes the event indepen
 
 ```
 docs/api-specs/
-├── service-a.yaml              # Primary spec — REST (paths) + gRPC (x-grpc) + async (x-async-events)
-├── service-b.yaml              # Same structure for Service B
-├── service-a-async.yaml        # Optional: formal AsyncAPI YAML (for tooling / code-gen)
-├── service-b-async.yaml        # Optional: formal AsyncAPI YAML for Service B
+├── user-service.yaml           # REST spec — Auth, Profile
+├── friend-service.yaml         # REST + async (friend.request.sent/accepted)
+├── post-service.yaml           # REST + async (post.liked/commented/shared)
+├── chat-service.yaml           # REST + Socket.IO + async (message.sent, group.member.added)
+├── media-service.yaml          # REST spec — Upload, Presigned URL
+├── notification-service.yaml   # REST + Socket.IO + async (consumes all events)
 ├── async-spec-guide.md         # This file
 └── grpc-spec-guide.md
 ```

@@ -1,0 +1,316 @@
+# =======================================================================
+# media-service — Complete Service Contract
+# =======================================================================
+# Bounded Context: Media
+# Responsibility: File upload to MinIO, presigned URL generation, media metadata
+# Storage: MinIO (S3-compatible object storage)
+# Security: Presigned URLs with TTL (15 min) — no direct MinIO access
+# =======================================================================
+
+openapi: 3.0.3
+
+info:
+  title: media-service — Media Management
+  description: |
+    Manages media file lifecycle: upload images to MinIO (S3-compatible storage),
+    store metadata, and generate time-limited presigned URLs for secure access.
+
+    **Security Model:**
+    - MinIO bucket is PRIVATE (no public access)
+    - All access requires JWT authentication via Gateway
+    - Files are served via presigned URLs with 15-minute TTL
+    - After TTL expires, the URL returns 403 Forbidden
+    - Clients must request a new presigned URL to access the file again
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5005
+    description: Local development (direct)
+  - url: http://localhost:8080/api
+    description: Local development (via API Gateway)
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ── Upload ───────────────────────────────────────────────────────────
+
+  /media/upload:
+    post:
+      summary: Upload a media file
+      operationId: uploadMedia
+      tags: [Media]
+      security:
+        - bearerAuth: []
+      description: |
+        Uploads an image file to MinIO private bucket.
+
+        **Processing steps:**
+        1. Validate JWT (user must be authenticated)
+        2. Validate file type (only jpg, jpeg, png, gif, webp allowed)
+        3. Validate file size (max 10MB)
+        4. Generate unique filename: `{userId}/{uuid}.{ext}`
+        5. Upload to MinIO private bucket via S3 PutObject
+        6. Save metadata to database (id, originalName, mimeType, size, objectKey, uploadedBy)
+        7. Return mediaId for use in posts, profiles, messages
+
+        Derived from: DDD 2.3 command "UploadMedia"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file (jpg, png, gif, webp — max 10MB)
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaUploadResponse'
+        '400':
+          description: Invalid file type (only jpg, png, gif, webp allowed)
+        '401':
+          description: Not authenticated
+        '413':
+          description: File too large (max 10MB)
+
+  # ── Media Access ────────────────────────────────────────────────────
+
+  /media/{id}:
+    get:
+      summary: Get media metadata
+      operationId: getMediaInfo
+      tags: [Media]
+      security:
+        - bearerAuth: []
+      description: Returns metadata for a media file (without the actual file content).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Media metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaInfo'
+        '404':
+          description: Media not found
+
+    delete:
+      summary: Delete a media file
+      operationId: deleteMedia
+      tags: [Media]
+      security:
+        - bearerAuth: []
+      description: |
+        Deletes a media file from MinIO and removes its metadata.
+        Only the uploader can delete their own files.
+        Derived from: DDD 2.3 command "DeleteMedia"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Media deleted
+        '403':
+          description: Only the uploader can delete
+        '404':
+          description: Media not found
+
+  /media/{id}/url:
+    get:
+      summary: Get presigned URL for a media file
+      operationId: getPresignedUrl
+      tags: [Media]
+      security:
+        - bearerAuth: []
+      description: |
+        Generates a time-limited presigned URL for direct download from MinIO.
+
+        **Security flow:**
+        1. Client calls this endpoint with JWT (via Gateway)
+        2. Service validates JWT and checks access rights
+        3. Generates presigned URL from MinIO with TTL = 15 minutes
+        4. Returns the presigned URL + expiry timestamp
+        5. Client uses the presigned URL to download directly from MinIO
+        6. No auth header needed for presigned URL download
+        7. After 15 minutes, the presigned URL expires → 403
+
+        **Access control:**
+        - Media owner always has access
+        - Other users have access if the media is attached to:
+          - A post they can see (public, or friends-only from a friend)
+          - A conversation/group they are a member of
+          - A user profile they can view
+
+        Derived from: DDD 2.7 Flow 5 (Presigned URL Security)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Presigned URL generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedUrlResponse'
+        '403':
+          description: No access to this media
+        '404':
+          description: Media not found
+
+  # ── Batch Operations ────────────────────────────────────────────────
+
+  /media/batch-urls:
+    post:
+      summary: Get presigned URLs for multiple media files
+      operationId: batchGetPresignedUrls
+      tags: [Media]
+      security:
+        - bearerAuth: []
+      description: |
+        Generates presigned URLs for multiple media files in a single request.
+        Useful for loading posts with multiple images or feed rendering.
+        Each URL has the same 15-minute TTL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mediaIds]
+              properties:
+                mediaIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  maxItems: 50
+      responses:
+        '200':
+          description: Presigned URLs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  urls:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PresignedUrlResponse'
+
+# =======================================================================
+# Shared Schemas
+# =======================================================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    MediaUploadResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique media ID — use this in posts, profiles, messages
+        originalName:
+          type: string
+          example: avatar.jpg
+        mimeType:
+          type: string
+          example: image/jpeg
+        size:
+          type: integer
+          description: File size in bytes
+          example: 2048576
+        uploadedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    MediaInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+          description: File size in bytes
+        uploadedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    PresignedUrlResponse:
+      type: object
+      properties:
+        mediaId:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+          description: |
+            Presigned URL for direct download from MinIO.
+            No authentication header needed — signature is embedded in URL params.
+            Example: https://minio:9000/socialhub-media/userId/uuid.jpg?X-Amz-Algorithm=...&X-Amz-Signature=...&X-Amz-Expires=900
+          example: "http://minio:9000/socialhub-media/abc/def.jpg?X-Amz-Signature=..."
+        expiresAt:
+          type: string
+          format: date-time
+          description: Exact timestamp when this URL expires (15 minutes from generation)
+        ttlSeconds:
+          type: integer
+          description: TTL in seconds (900 = 15 minutes)
+          example: 900

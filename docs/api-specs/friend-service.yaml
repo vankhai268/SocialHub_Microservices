@@ -1,0 +1,505 @@
+# =======================================================================
+# friend-service — Complete Service Contract
+# =======================================================================
+# Bounded Context: Social Graph
+# Responsibility: Friend requests, friendship management, mutual friends, suggestions
+# Database: PostgreSQL
+# Events Published: Redis Pub/Sub (friend.request.sent, friend.request.accepted)
+# =======================================================================
+
+openapi: 3.0.3
+
+info:
+  title: friend-service — Social Graph
+  description: |
+    Manages the social graph: sending/accepting/rejecting friend requests,
+    friendship lifecycle, mutual friends discovery, and friend suggestions.
+    Publishes events to Redis Pub/Sub for notification-service consumption.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5002
+    description: Local development (direct)
+  - url: http://localhost:8080/api
+    description: Local development (via API Gateway)
+
+# =======================================================================
+# SECTION 1 — REST / HTTP endpoints
+# =======================================================================
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ── Friend Requests ──────────────────────────────────────────────────
+
+  /friends/request:
+    post:
+      summary: Send a friend request
+      operationId: sendFriendRequest
+      tags: [Friend Requests]
+      security:
+        - bearerAuth: []
+      description: |
+        Sends a friend request from the authenticated user to the target user.
+        Business rules:
+        - Cannot send to self
+        - Cannot send if already friends
+        - Cannot send if a pending request already exists (in either direction)
+        Publishes "friend.request.sent" event to Redis Pub/Sub.
+        Derived from: DDD 2.3 command "SendFriendRequest"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toUserId]
+              properties:
+                toUserId:
+                  type: string
+                  format: uuid
+                  description: ID of the user to send the friend request to
+      responses:
+        '201':
+          description: Friend request sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendRequest'
+        '400':
+          description: Cannot send friend request to self
+        '404':
+          description: Target user not found
+        '409':
+          description: Already friends or pending request exists
+
+  /friends/requests:
+    get:
+      summary: List pending friend requests
+      operationId: listFriendRequests
+      tags: [Friend Requests]
+      security:
+        - bearerAuth: []
+      description: |
+        Lists friend requests for the authenticated user.
+        Filter by type: "received" (others → me) or "sent" (me → others).
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [received, sent]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+      responses:
+        '200':
+          description: List of friend requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFriendRequests'
+
+  /friends/requests/{id}/accept:
+    put:
+      summary: Accept a friend request
+      operationId: acceptFriendRequest
+      tags: [Friend Requests]
+      security:
+        - bearerAuth: []
+      description: |
+        Accepts a pending friend request. Creates a bidirectional friendship.
+        Only the recipient of the request can accept.
+        Publishes "friend.request.accepted" event to Redis Pub/Sub.
+        Invalidates friend list cache in Redis for both users.
+        Derived from: DDD 2.3 command "AcceptFriendRequest"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Friend request ID
+      responses:
+        '200':
+          description: Friend request accepted, friendship created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Friendship'
+        '403':
+          description: Only the recipient can accept
+        '404':
+          description: Friend request not found
+
+  /friends/requests/{id}/reject:
+    put:
+      summary: Reject a friend request
+      operationId: rejectFriendRequest
+      tags: [Friend Requests]
+      security:
+        - bearerAuth: []
+      description: |
+        Rejects a pending friend request. Only the recipient can reject.
+        Derived from: DDD 2.3 command "RejectFriendRequest"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Friend request rejected
+        '403':
+          description: Only the recipient can reject
+        '404':
+          description: Friend request not found
+
+  # ── Friendships ──────────────────────────────────────────────────────
+
+  /friends:
+    get:
+      summary: List friends of the authenticated user
+      operationId: listFriends
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      description: |
+        Returns the friend list of the authenticated user with profile info.
+        Cached in Redis (key: friends:{userId}, TTL: 15 min).
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+      responses:
+        '200':
+          description: List of friends
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFriends'
+
+  /friends/{friendId}:
+    delete:
+      summary: Remove a friend
+      operationId: removeFriend
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      description: |
+        Removes the friendship between the authenticated user and the specified friend.
+        Removes both directions. Invalidates friend list cache for both users.
+        Derived from: DDD 2.3 command "RemoveFriend"
+      parameters:
+        - name: friendId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Friend removed
+        '404':
+          description: Friendship not found
+
+  /friends/mutual/{userId}:
+    get:
+      summary: Get mutual friends
+      operationId: getMutualFriends
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      description: Returns the list of users who are friends with both the authenticated user and the specified user.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of mutual friends
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mutualFriends:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FriendInfo'
+                  count:
+                    type: integer
+
+  /friends/suggestions:
+    get:
+      summary: Get friend suggestions
+      operationId: getFriendSuggestions
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      description: |
+        Suggests users to befriend based on mutual friends (friends-of-friends).
+        Excludes users who are already friends or have pending requests.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 30
+      responses:
+        '200':
+          description: Friend suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/FriendInfo'
+                        - type: object
+                          properties:
+                            mutualFriendCount:
+                              type: integer
+                              description: Number of mutual friends
+
+  /friends/check/{userId}:
+    get:
+      summary: Check friendship status with a user
+      operationId: checkFriendshipStatus
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      description: Returns the relationship status between the authenticated user and the specified user.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Friendship status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [none, pending_sent, pending_received, friends]
+                  requestId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                    description: ID of the pending request (if status is pending_*)
+
+  # ── Internal endpoints (service-to-service) ──────────────────────────
+
+  /internal/friends/{userId}:
+    get:
+      summary: Get friend IDs (internal only)
+      operationId: getInternalFriendIds
+      tags: [Internal]
+      description: |
+        Internal endpoint used by post-service to get the friend list
+        for newsfeed generation. Not exposed through the API Gateway.
+        Returns only user IDs (no profile data) for performance.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of friend user IDs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friendIds:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+
+# =======================================================================
+# SECTION 3 — Async / Event-driven (x-async-events extension)
+# =======================================================================
+
+x-async-events:
+  enabled: true
+  broker: redis
+  brokerUrl: redis://redis:6379
+
+  publishes:
+    - channel: friend.request.sent
+      description: Emitted when a user sends a friend request to another user
+      analysisRef: "DDD 2.2 Domain Event: FriendRequestSent"
+      message:
+        name: FriendRequestSentEvent
+        fields:
+          - name: eventId,      type: string (uuid), description: Deduplication ID
+          - name: fromUserId,   type: string (uuid), description: User who sent the request
+          - name: toUserId,     type: string (uuid), description: User who received the request
+          - name: requestId,    type: string (uuid), description: Friend request ID
+          - name: occurredAt,   type: string (ISO-8601 datetime)
+
+    - channel: friend.request.accepted
+      description: Emitted when a user accepts a friend request
+      analysisRef: "DDD 2.2 Domain Event: FriendRequestAccepted"
+      message:
+        name: FriendRequestAcceptedEvent
+        fields:
+          - name: eventId,      type: string (uuid)
+          - name: fromUserId,   type: string (uuid), description: User who originally sent the request
+          - name: toUserId,     type: string (uuid), description: User who accepted the request
+          - name: occurredAt,   type: string (ISO-8601 datetime)
+
+# =======================================================================
+# Shared Schemas
+# =======================================================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    FriendRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fromUserId:
+          type: string
+          format: uuid
+        toUserId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+        createdAt:
+          type: string
+          format: date-time
+
+    Friendship:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        friendId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    FriendInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        friendshipSince:
+          type: string
+          format: date-time
+
+    PaginatedFriendRequests:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/FriendRequest'
+              - type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/FriendInfo'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    PaginatedFriends:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendInfo'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer

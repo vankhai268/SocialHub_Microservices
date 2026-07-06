@@ -1,6 +1,7 @@
-# Docker Compose — Multi-container orchestration
+# ─────────────────────────────────────────────────────────────────────────
+# SocialHub — Docker Compose
 # Run: docker compose up --build
-# Docs: https://docs.docker.com/compose/
+# ─────────────────────────────────────────────────────────────────────────
 
 services:
   # ─── Frontend ────────────────────────────────────
@@ -12,6 +13,9 @@ services:
       - gateway
     networks:
       - app-network
+    environment:
+      - VITE_API_URL=http://localhost:${GATEWAY_PORT:-8080}/api
+      - VITE_WS_URL=http://localhost:${GATEWAY_PORT:-8080}
 
   # ─── API Gateway ─────────────────────────────────
   gateway:
@@ -19,68 +23,212 @@ services:
     ports:
       - "${GATEWAY_PORT:-8080}:8000"
     depends_on:
-      - service-a
-      - service-b
-    networks:
-      - app-network
-
-  # ─── Service A ───────────────────────────────────
-  service-a:
-    build: ./services/service-a
-    ports:
-      - "${SERVICE_A_PORT:-5001}:5000"
-    env_file:
-      - .env
-    networks:
-      - app-network
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-
-  # ─── Service B ───────────────────────────────────
-  service-b:
-    build: ./services/service-b
-    ports:
-      - "${SERVICE_B_PORT:-5002}:5000"
+      - user-service
+      - friend-service
+      - post-service
+      - chat-service
+      - media-service
+      - notification-service
     env_file:
       - .env
     networks:
       - app-network
 
-  # ─── Shared Infrastructure (uncomment as needed) ─
-  # db:
-  #   image: postgres:16-alpine    # or mysql:8, mongo:7, etc.
-  #   ports:
-  #     - "${DB_PORT:-5432}:5432"
-  #   environment:
-  #     POSTGRES_DB: ${DB_NAME:-mydb}
-  #     POSTGRES_USER: ${DB_USER:-admin}
-  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
-  #   volumes:
-  #     - db-data:/var/lib/postgresql/data
-  #   networks:
-  #     - app-network
+  # ─── user-service (Identity & Access) ────────────
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "${USER_SERVICE_PORT:-5001}:5000"
+    env_file:
+      - .env
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   networks:
-  #     - app-network
+  # ─── friend-service (Social Graph) ───────────────
+  friend-service:
+    build: ./services/friend-service
+    ports:
+      - "${FRIEND_SERVICE_PORT:-5002}:5000"
+    env_file:
+      - .env
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # rabbitmq:
-  #   image: rabbitmq:3-management-alpine
-  #   ports:
-  #     - "5672:5672"
-  #     - "15672:15672"
-  #   networks:
-  #     - app-network
+  # ─── post-service (Content) ──────────────────────
+  post-service:
+    build: ./services/post-service
+    ports:
+      - "${POST_SERVICE_PORT:-5003}:5000"
+    env_file:
+      - .env
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── chat-service (Messaging) ────────────────────
+  chat-service:
+    build: ./services/chat-service
+    ports:
+      - "${CHAT_SERVICE_PORT:-5004}:5000"
+    env_file:
+      - .env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── media-service (Media) ───────────────────────
+  media-service:
+    build: ./services/media-service
+    ports:
+      - "${MEDIA_SERVICE_PORT:-5005}:5000"
+    env_file:
+      - .env
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── notification-service (Notification) ─────────
+  notification-service:
+    build: ./services/notification-service
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-5006}:5000"
+    env_file:
+      - .env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Infrastructure ─────────────────────────────
+
+  pg:
+    image: postgres:16-alpine
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-socialhub}
+      POSTGRES_USER: ${PG_USER:-socialhub}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-socialhub_secret}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-socialhub}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-socialhub}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-socialhub_secret}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-socialhub}
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-socialhub_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-socialhub_minio_secret}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   app-network:
     driver: bridge
 
-# volumes:
-#   db-data:
+volumes:
+  pg-data:
+  mongo-data:
+  redis-data:
+  minio-data:

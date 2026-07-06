@@ -1,0 +1,414 @@
+# =======================================================================
+# notification-service — Complete Service Contract
+# =======================================================================
+# Bounded Context: Notification
+# Responsibility: Create notifications from events, push realtime via Socket.IO, CRUD
+# Database: MongoDB
+# Events Consumed: Redis Pub/Sub (friend.*, post.*, message.*, group.*)
+# Realtime Push: Socket.IO (notification:new, notification:count)
+# =======================================================================
+
+openapi: 3.0.3
+
+info:
+  title: notification-service — Notifications
+  description: |
+    Consumes events from other services via Redis Pub/Sub, creates notifications,
+    and pushes them to users in realtime via Socket.IO.
+
+    **Event flow:**
+    1. Source services (friend, post, chat) publish events to Redis Pub/Sub
+    2. notification-service subscribes to all relevant channels
+    3. For each event, creates a Notification document in MongoDB
+    4. If the recipient is connected via Socket.IO, pushes the notification in realtime
+    5. Client can also poll/fetch notifications via REST endpoints
+
+    **Notification Types:**
+    - `friend_request` — someone sent you a friend request
+    - `friend_accepted` — someone accepted your friend request
+    - `post_liked` — someone liked your post
+    - `post_commented` — someone commented on your post
+    - `post_shared` — someone shared your post
+    - `new_message` — someone sent you a message (when offline)
+    - `group_added` — you were added to a group chat
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5006
+    description: Local development (direct)
+  - url: http://localhost:8080/api
+    description: Local development (via API Gateway)
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ── Notifications ──────────────────────────────────────────────────
+
+  /notifications:
+    get:
+      summary: Get notifications
+      operationId: getNotifications
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      description: |
+        Returns notifications for the authenticated user, ordered by newest first.
+        Can filter to show only unread notifications.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: If true, returns only unread notifications
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNotifications'
+
+  /notifications/unread-count:
+    get:
+      summary: Get unread notification count
+      operationId: getUnreadCount
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      description: Returns the total count of unread notifications for the authenticated user.
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unreadCount:
+                    type: integer
+                    example: 5
+
+  /notifications/{id}/read:
+    put:
+      summary: Mark a notification as read
+      operationId: markNotificationRead
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      description: |
+        Marks a single notification as read.
+        Derived from: DDD 2.3 command "MarkNotificationRead"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification marked as read
+        '404':
+          description: Notification not found
+
+  /notifications/read-all:
+    put:
+      summary: Mark all notifications as read
+      operationId: markAllNotificationsRead
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      description: |
+        Marks all unread notifications for the authenticated user as read.
+        Derived from: DDD 2.3 command "MarkAllNotificationsRead"
+      responses:
+        '200':
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updatedCount:
+                    type: integer
+                    description: Number of notifications marked as read
+
+# =======================================================================
+# SECTION 2 — Socket.IO Events (x-socketio-events extension)
+# =======================================================================
+# Socket.IO connection: ws://localhost:5006 (or via Gateway)
+# Authentication: JWT token in handshake auth: { token: "Bearer ..." }
+# On connect: join room `user:{userId}` for targeted notifications
+# =======================================================================
+
+x-socketio-events:
+  enabled: true
+  namespace: /notifications
+  authentication: JWT in handshake auth object
+
+  server-to-client:
+    - event: "notification:new"
+      description: Pushed when a new notification is created for the user
+      payload:
+        id: string (notification ID)
+        type: string (enum — see Notification Types in description)
+        message: string (human-readable notification text, e.g. "User A đã thích bài viết của bạn")
+        fromUser:
+          id: string (uuid)
+          displayName: string
+          avatarUrl: string (nullable)
+        referenceId: string (ID of related entity — postId, requestId, conversationId, etc.)
+        referenceType: string (post, friend_request, conversation, group)
+        isRead: boolean (always false for new)
+        createdAt: string (ISO-8601)
+
+    - event: "notification:count"
+      description: Pushed when the unread count changes (after new notification or read action)
+      payload:
+        unreadCount: integer
+
+# =======================================================================
+# SECTION 3 — Async / Event-driven (x-async-events extension)
+# =======================================================================
+# notification-service is a PURE CONSUMER — it does not publish events
+# =======================================================================
+
+x-async-events:
+  enabled: true
+  broker: redis
+  brokerUrl: redis://redis:6379
+
+  consumes:
+    - channel: friend.request.sent
+      description: Creates a "friend_request" notification for the recipient
+      analysisRef: "DDD 2.2 Domain Event: FriendRequestSent (from friend-service)"
+      message:
+        name: FriendRequestSentEvent
+        fields:
+          - name: eventId,    type: string (uuid)
+          - name: fromUserId, type: string (uuid)
+          - name: toUserId,   type: string (uuid)
+          - name: requestId,  type: string (uuid)
+          - name: occurredAt, type: string (ISO-8601)
+      action: |
+        1. Fetch fromUser display name from user-service
+        2. Create notification: type=friend_request, userId=toUserId,
+           message="{fromUser.displayName} đã gửi lời mời kết bạn",
+           referenceId=requestId, referenceType=friend_request
+        3. Push via Socket.IO to room user:{toUserId}
+
+    - channel: friend.request.accepted
+      description: Creates a "friend_accepted" notification for the original sender
+      analysisRef: "DDD 2.2 Domain Event: FriendRequestAccepted (from friend-service)"
+      message:
+        name: FriendRequestAcceptedEvent
+        fields:
+          - name: eventId,    type: string (uuid)
+          - name: fromUserId, type: string (uuid), description: Original sender
+          - name: toUserId,   type: string (uuid), description: User who accepted
+          - name: occurredAt, type: string (ISO-8601)
+      action: |
+        1. Fetch toUser display name from user-service
+        2. Create notification: type=friend_accepted, userId=fromUserId,
+           message="{toUser.displayName} đã chấp nhận lời mời kết bạn"
+        3. Push via Socket.IO
+
+    - channel: post.liked
+      description: Creates a "post_liked" notification for the post author
+      analysisRef: "DDD 2.2 Domain Event: PostLiked (from post-service)"
+      message:
+        name: PostLikedEvent
+        fields:
+          - name: eventId,      type: string (uuid)
+          - name: userId,       type: string (uuid), description: User who liked
+          - name: postId,       type: string (uuid)
+          - name: postAuthorId, type: string (uuid)
+          - name: occurredAt,   type: string (ISO-8601)
+      action: |
+        1. Skip if userId == postAuthorId (don't notify self-likes)
+        2. Fetch userId display name from user-service
+        3. Create notification: type=post_liked, userId=postAuthorId,
+           message="{user.displayName} đã thích bài viết của bạn",
+           referenceId=postId, referenceType=post
+        4. Push via Socket.IO
+
+    - channel: post.commented
+      description: Creates a "post_commented" notification for the post author
+      analysisRef: "DDD 2.2 Domain Event: CommentCreated (from post-service)"
+      message:
+        name: PostCommentedEvent
+        fields:
+          - name: eventId,      type: string (uuid)
+          - name: userId,       type: string (uuid)
+          - name: postId,       type: string (uuid)
+          - name: postAuthorId, type: string (uuid)
+          - name: commentId,    type: string (uuid)
+          - name: occurredAt,   type: string (ISO-8601)
+      action: |
+        1. Skip if userId == postAuthorId
+        2. Create notification: type=post_commented, userId=postAuthorId,
+           message="{user.displayName} đã bình luận bài viết của bạn"
+        3. Push via Socket.IO
+
+    - channel: post.shared
+      description: Creates a "post_shared" notification for the original post author
+      analysisRef: "DDD 2.2 Domain Event: PostShared (from post-service)"
+      message:
+        name: PostSharedEvent
+        fields:
+          - name: eventId,      type: string (uuid)
+          - name: userId,       type: string (uuid)
+          - name: postId,       type: string (uuid)
+          - name: postAuthorId, type: string (uuid)
+          - name: occurredAt,   type: string (ISO-8601)
+      action: |
+        1. Skip if userId == postAuthorId
+        2. Create notification: type=post_shared, userId=postAuthorId
+        3. Push via Socket.IO
+
+    - channel: message.sent
+      description: Creates a "new_message" notification for offline recipients
+      analysisRef: "DDD 2.2 Domain Event: MessageSent (from chat-service)"
+      message:
+        name: MessageSentEvent
+        fields:
+          - name: eventId,        type: string (uuid)
+          - name: senderId,       type: string (uuid)
+          - name: conversationId, type: string
+          - name: recipientId,    type: string (uuid)
+          - name: preview,        type: string
+          - name: occurredAt,     type: string (ISO-8601)
+      action: |
+        1. Create notification: type=new_message, userId=recipientId,
+           message="{sender.displayName} đã gửi tin nhắn cho bạn",
+           referenceId=conversationId, referenceType=conversation
+        2. Push via Socket.IO (recipient may have reconnected)
+
+    - channel: group.member.added
+      description: Creates a "group_added" notification for the added user
+      analysisRef: "DDD 2.2 Domain Event: GroupMemberAdded (from chat-service)"
+      message:
+        name: GroupMemberAddedEvent
+        fields:
+          - name: eventId,       type: string (uuid)
+          - name: groupId,       type: string
+          - name: groupName,     type: string
+          - name: addedUserId,   type: string (uuid)
+          - name: addedByUserId, type: string (uuid)
+          - name: occurredAt,    type: string (ISO-8601)
+      action: |
+        1. Create notification: type=group_added, userId=addedUserId,
+           message="Bạn đã được thêm vào nhóm '{groupName}'"
+        2. Push via Socket.IO
+
+# =======================================================================
+# Shared Schemas
+# =======================================================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - friend_request
+            - friend_accepted
+            - post_liked
+            - post_commented
+            - post_shared
+            - new_message
+            - group_added
+        message:
+          type: string
+          description: Human-readable notification text
+          example: "Nguyễn Văn A đã thích bài viết của bạn"
+        fromUser:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            displayName:
+              type: string
+            avatarUrl:
+              type: string
+              format: uri
+              nullable: true
+        userId:
+          type: string
+          format: uuid
+          description: The user who receives this notification
+        referenceId:
+          type: string
+          description: ID of the related entity (postId, requestId, conversationId, groupId)
+        referenceType:
+          type: string
+          enum: [post, friend_request, conversation, group]
+          description: Type of the referenced entity
+        isRead:
+          type: boolean
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+
+    PaginatedNotifications:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer

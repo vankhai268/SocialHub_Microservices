@@ -1,0 +1,684 @@
+# =======================================================================
+# post-service — Complete Service Contract
+# =======================================================================
+# Bounded Context: Content
+# Responsibility: Posts CRUD, Like/Unlike, Comment, Share, Newsfeed
+# Database: PostgreSQL
+# Cache: Redis (feed cache, pub events)
+# Dependencies: user-service (author info), friend-service (friend list for feed),
+#               media-service (validate media)
+# =======================================================================
+
+openapi: 3.0.3
+
+info:
+  title: post-service — Content
+  description: |
+    Manages all content-related operations: creating/updating/deleting posts,
+    likes, comments, sharing, and generating the personalized newsfeed.
+    Feed is cached in Redis sorted set for performance.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5003
+    description: Local development (direct)
+  - url: http://localhost:8080/api
+    description: Local development (via API Gateway)
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ── Posts ─────────────────────────────────────────────────────────────
+
+  /posts:
+    post:
+      summary: Create a new post
+      operationId: createPost
+      tags: [Posts]
+      security:
+        - bearerAuth: []
+      description: |
+        Creates a new post with text content and/or media attachments.
+        At least one of content or mediaIds must be provided.
+        MediaIds are validated against media-service.
+        Invalidates feed cache for author's friends in Redis.
+        Publishes no event (feed is pull-based with cache invalidation).
+        Derived from: DDD 2.3 command "CreatePost"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePostRequest'
+      responses:
+        '201':
+          description: Post created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Post cannot be empty (no content and no media)
+
+  /posts/{id}:
+    get:
+      summary: Get a post by ID
+      operationId: getPostById
+      tags: [Posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Post details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostWithAuthor'
+        '404':
+          description: Post not found
+
+    put:
+      summary: Update a post
+      operationId: updatePost
+      tags: [Posts]
+      security:
+        - bearerAuth: []
+      description: |
+        Updates the content and/or media of a post. Only the author can update.
+        Derived from: DDD 2.3 command "UpdatePost"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePostRequest'
+      responses:
+        '200':
+          description: Post updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '403':
+          description: Only the author can update
+        '404':
+          description: Post not found
+
+    delete:
+      summary: Delete a post
+      operationId: deletePost
+      tags: [Posts]
+      security:
+        - bearerAuth: []
+      description: |
+        Deletes a post and all its associated likes and comments.
+        Only the author can delete. Derived from: DDD 2.3 command "DeletePost"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Post deleted
+        '403':
+          description: Only the author can delete
+        '404':
+          description: Post not found
+
+  /posts/user/{userId}:
+    get:
+      summary: Get posts by a specific user
+      operationId: getUserPosts
+      tags: [Posts]
+      security:
+        - bearerAuth: []
+      description: Returns all posts created by the specified user, ordered by newest first.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+      responses:
+        '200':
+          description: User's posts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPosts'
+
+  # ── Newsfeed ──────────────────────────────────────────────────────────
+
+  /feed:
+    get:
+      summary: Get personalized newsfeed
+      operationId: getFeed
+      tags: [Feed]
+      security:
+        - bearerAuth: []
+      description: |
+        Returns the authenticated user's newsfeed — posts from friends,
+        ordered by newest first. Supports cursor-based pagination.
+
+        **Caching strategy:**
+        - Cache key: feed:{userId} (Redis sorted set, score = timestamp)
+        - Cache TTL: 10 minutes
+        - Cache invalidation: when a friend creates/deletes a post
+        - On cache miss: fetch friend IDs from friend-service, query posts from PostgreSQL
+
+        Derived from: DDD 2.7 Flow 3
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Cursor for pagination (post ID of last item on previous page)
+      responses:
+        '200':
+          description: Newsfeed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedResponse'
+
+  # ── Likes ─────────────────────────────────────────────────────────────
+
+  /posts/{id}/like:
+    post:
+      summary: Like a post
+      operationId: likePost
+      tags: [Interactions]
+      security:
+        - bearerAuth: []
+      description: |
+        Adds a like from the authenticated user to the post.
+        One user can only like a post once (idempotent).
+        Publishes "post.liked" event to Redis Pub/Sub for notification.
+        Derived from: DDD 2.3 command "LikePost"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Post liked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  likeCount:
+                    type: integer
+        '404':
+          description: Post not found
+
+    delete:
+      summary: Unlike a post
+      operationId: unlikePost
+      tags: [Interactions]
+      security:
+        - bearerAuth: []
+      description: |
+        Removes the authenticated user's like from the post.
+        Derived from: DDD 2.3 command "UnlikePost"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Post unliked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  likeCount:
+                    type: integer
+        '404':
+          description: Post not found
+
+  # ── Comments ──────────────────────────────────────────────────────────
+
+  /posts/{id}/comments:
+    get:
+      summary: Get comments on a post
+      operationId: getPostComments
+      tags: [Interactions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+      responses:
+        '200':
+          description: Comments list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedComments'
+
+    post:
+      summary: Create a comment on a post
+      operationId: createComment
+      tags: [Interactions]
+      security:
+        - bearerAuth: []
+      description: |
+        Adds a comment to a post.
+        Publishes "post.commented" event to Redis Pub/Sub for notification.
+        Derived from: DDD 2.3 command "CreateComment"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+      responses:
+        '201':
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          description: Invalid comment content
+        '404':
+          description: Post not found
+
+  /posts/{postId}/comments/{commentId}:
+    delete:
+      summary: Delete a comment
+      operationId: deleteComment
+      tags: [Interactions]
+      security:
+        - bearerAuth: []
+      description: |
+        Deletes a comment. Allowed for: comment author or post owner.
+        Derived from: DDD 2.3 command "DeleteComment"
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Comment deleted
+        '403':
+          description: Not authorized (not comment author or post owner)
+        '404':
+          description: Comment or post not found
+
+  # ── Share ─────────────────────────────────────────────────────────────
+
+  /posts/{id}/share:
+    post:
+      summary: Share a post
+      operationId: sharePost
+      tags: [Interactions]
+      security:
+        - bearerAuth: []
+      description: |
+        Creates a shared post referencing the original post.
+        The shared post appears on the sharer's timeline and in friends' feeds.
+        Publishes "post.shared" event to Redis Pub/Sub for notification.
+        Derived from: DDD 2.3 command "SharePost"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  maxLength: 500
+                  description: Optional text added by the sharer
+      responses:
+        '201':
+          description: Post shared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '404':
+          description: Original post not found
+
+# =======================================================================
+# SECTION 3 — Async / Event-driven (x-async-events extension)
+# =======================================================================
+
+x-async-events:
+  enabled: true
+  broker: redis
+  brokerUrl: redis://redis:6379
+
+  publishes:
+    - channel: post.liked
+      description: Emitted when a user likes a post (to notify the post author)
+      analysisRef: "DDD 2.2 Domain Event: PostLiked"
+      message:
+        name: PostLikedEvent
+        fields:
+          - name: eventId,       type: string (uuid)
+          - name: userId,        type: string (uuid), description: User who liked
+          - name: postId,        type: string (uuid)
+          - name: postAuthorId,  type: string (uuid), description: Post author to notify
+          - name: occurredAt,    type: string (ISO-8601 datetime)
+
+    - channel: post.commented
+      description: Emitted when a user comments on a post (to notify the post author)
+      analysisRef: "DDD 2.2 Domain Event: CommentCreated"
+      message:
+        name: PostCommentedEvent
+        fields:
+          - name: eventId,       type: string (uuid)
+          - name: userId,        type: string (uuid), description: User who commented
+          - name: postId,        type: string (uuid)
+          - name: postAuthorId,  type: string (uuid)
+          - name: commentId,     type: string (uuid)
+          - name: occurredAt,    type: string (ISO-8601 datetime)
+
+    - channel: post.shared
+      description: Emitted when a user shares a post (to notify the original post author)
+      analysisRef: "DDD 2.2 Domain Event: PostShared"
+      message:
+        name: PostSharedEvent
+        fields:
+          - name: eventId,       type: string (uuid)
+          - name: userId,        type: string (uuid), description: User who shared
+          - name: postId,        type: string (uuid)
+          - name: postAuthorId,  type: string (uuid)
+          - name: occurredAt,    type: string (ISO-8601 datetime)
+
+# =======================================================================
+# Shared Schemas
+# =======================================================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    CreatePostRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          maxLength: 5000
+          description: Text content of the post
+        mediaIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 10
+          description: IDs of uploaded media (from media-service)
+        visibility:
+          type: string
+          enum: [public, friends, private]
+          default: friends
+          description: Who can see this post
+
+    UpdatePostRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          maxLength: 5000
+        mediaIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 10
+
+    Post:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+        content:
+          type: string
+        mediaIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        visibility:
+          type: string
+          enum: [public, friends, private]
+        likeCount:
+          type: integer
+        commentCount:
+          type: integer
+        shareCount:
+          type: integer
+        isShared:
+          type: boolean
+          description: Whether this is a shared post
+        originalPostId:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of the original post (if shared)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PostWithAuthor:
+      allOf:
+        - $ref: '#/components/schemas/Post'
+        - type: object
+          properties:
+            author:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                displayName:
+                  type: string
+                avatarUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+            isLikedByMe:
+              type: boolean
+              description: Whether the authenticated user has liked this post
+            originalPost:
+              $ref: '#/components/schemas/PostWithAuthor'
+              nullable: true
+              description: Original post details (if this is a shared post)
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        postId:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        author:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            displayName:
+              type: string
+            avatarUrl:
+              type: string
+              format: uri
+              nullable: true
+
+    FeedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostWithAuthor'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        nextCursor:
+          type: string
+          nullable: true
+          description: Cursor for next page (null if no more items)
+
+    PaginatedPosts:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostWithAuthor'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    PaginatedComments:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
