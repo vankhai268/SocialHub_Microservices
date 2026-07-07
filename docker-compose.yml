@@ -124,6 +124,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+      mongo:
+        condition: service_healthy
     networks:
       - app-network
     healthcheck:
