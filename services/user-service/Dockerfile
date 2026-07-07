@@ -7,8 +7,8 @@ WORKDIR /usr/src/app
 # Bước 3: Sao chép file package.json và package-lock.json để cài đặt thư viện
 COPY package*.json ./
 
-# Bước 4: Cài đặt các thư viện phụ thuộc (chỉ cài production dependencies để tối ưu dung lượng)
-RUN npm ci --only=production
+# Bước 4: Cài đặt các thư viện phụ thuộc (chỉ cài production dependencies)
+RUN npm install --omit=dev
 
 # Bước 5: Sao chép toàn bộ mã nguồn vào container (trừ các file trong .dockerignore)
 COPY . .
