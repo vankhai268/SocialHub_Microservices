@@ -1,59 +1,70 @@
-# Service A
+# user-service
 
-> Rename this to match your actual service name (e.g., `user-service`, `order-service`).
+> Identity & Access Management Service for SocialHub.
 
 ## Overview
 
-Describe the responsibility of this service:
-- What business domain does it cover?
-- What data does it own?
-- What operations does it expose?
+- **Business Domain**: Identity, authentication, and user profiles.
+- **Data Owned**: User credentials, profile details (displayName, bio, avatarUrl), and active refresh tokens.
+- **Operations Exposed**: User registration, login, logout, refresh token rotation, profile lookup/update, user search, and batch internal user profile lookup.
 
 ## Tech Stack
 
 | Component  | Choice             |
 |------------|--------------------|
-| Language   | *(e.g., Python, Node.js, Java, Go, C#)* |
-| Framework  | *(e.g., FastAPI, Express, Spring Boot)*  |
-| Database   | *(e.g., PostgreSQL, MongoDB, MySQL)*     |
+| Language   | Node.js (ESM)      |
+| Framework  | Express.js         |
+| Database   | PostgreSQL         |
+| Cache      | Redis              |
 
 ## API Endpoints
 
-| Method | Endpoint      | Description          |
-|--------|---------------|----------------------|
-| GET    | `/health`     | Health check         |
-| ...    | ...           | ...                  |
+| Method | Endpoint              | Description                                          |
+|--------|-----------------------|------------------------------------------------------|
+| GET    | `/health`             | Health check                                         |
+| POST   | `/api/auth/register`  | Register a new user                                  |
+| POST   | `/api/auth/login`     | Login and receive JWT access & refresh tokens        |
+| POST   | `/api/auth/refresh`   | Refresh expired access token (with rotation)        |
+| POST   | `/api/auth/logout`    | Logout and blacklist active access token             |
+| GET    | `/api/users/:id`      | Get user profile (caches to Redis)                   |
+| PUT    | `/api/users/:id`      | Update user profile (invalidates cache)             |
+| GET    | `/api/users/search`   | Search users by name/email (paginated)               |
+| POST   | `/api/users/batch`    | Internal endpoint to lookup multiple users by IDs    |
 
-> Full API specification: [`docs/api-specs/service-a.yaml`](../../docs/api-specs/service-a.yaml)
+> Full API specification: [`docs/api-specs/user-service.yaml`](../../docs/api-specs/user-service.yaml)
 
 ## Running Locally
 
 ```bash
 # From project root
-docker compose up service-a --build
-
-# Or run standalone (adapt to your stack)
-cd src/
-# npm install && npm start
-# pip install -r requirements.txt && uvicorn main:app
-# go run main.go
-# dotnet run
+docker compose up user-service --build
 ```
 
 ## Project Structure
 
 ```
-service-a/
+user-service/
 ├── Dockerfile
 ├── readme.md
-└── src/           # Your source code goes here
+└── src/
+    ├── config/       # Connection configurations (db, redis)
+    ├── controllers/  # API business logic handlers
+    ├── middleware/   # Request interception (auth verify)
+    ├── routes/       # Endpoint routing definitions
+    └── utils/        # Utilities (token generation)
 ```
 
 ## Environment Variables
 
-| Variable   | Description         | Default   |
-|------------|---------------------|-----------|
-| `DB_HOST`  | Database hostname   | localhost |
-| `DB_PORT`  | Database port       | 5432      |
-
-
+| Variable             | Description                          | Default                               |
+|----------------------|--------------------------------------|---------------------------------------|
+| `PORT`               | Port of the service                  | 5001                                  |
+| `PG_HOST`            | PostgreSQL database host             | localhost                             |
+| `PG_PORT`            | PostgreSQL database port             | 5433                                  |
+| `PG_DATABASE`        | PostgreSQL database name             | socialhub_user                        |
+| `PG_USER`            | PostgreSQL username                  | postgres                              |
+| `PG_PASSWORD`        | PostgreSQL password                  | 123456                                |
+| `REDIS_HOST`         | Redis cache host                     | localhost                             |
+| `REDIS_PORT`         | Redis cache port                     | 6379                                  |
+| `JWT_SECRET`         | Access token signature secret        | your-jwt-secret-change-in-production  |
+| `JWT_REFRESH_SECRET` | Refresh token signature secret       | your-refresh-secret-change-in-prod    |
