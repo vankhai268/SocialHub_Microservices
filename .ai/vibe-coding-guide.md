@@ -46,11 +46,3 @@ The `.ai/prompts/` folder contains ready-to-use prompt templates. Copy, replace 
 
 ---
 
-## Grading & Presentation
-
-When presenting your project, be prepared to:
-
-1. **Demo**: `docker compose up --build` must run without errors
-2. **Explain the architecture**: Why did you decompose services this way?
-3. **Explain the code**: How each service works internally
-4. **AI's role**: What did AI help with? How did you verify and modify its output?
