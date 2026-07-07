@@ -5,17 +5,17 @@
 
 services:
   # ─── Frontend ────────────────────────────────────
-  frontend:
-    build: ./frontend
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    depends_on:
-      - gateway
-    networks:
-      - app-network
-    environment:
-      - VITE_API_URL=http://localhost:${GATEWAY_PORT:-8080}/api
-      - VITE_WS_URL=http://localhost:${GATEWAY_PORT:-8080}
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "${FRONTEND_PORT:-3000}:3000"
+  #   depends_on:
+  #     - gateway
+  #   networks:
+  #     - app-network
+  #   environment:
+  #     - VITE_API_URL=http://localhost:${GATEWAY_PORT:-8080}/api
+  #     - VITE_WS_URL=http://localhost:${GATEWAY_PORT:-8080}
 
   # ─── API Gateway ─────────────────────────────────
   gateway:
@@ -24,15 +24,16 @@ services:
       - "${GATEWAY_PORT:-8080}:8000"
     depends_on:
       - user-service
-      - friend-service
-      - post-service
-      - chat-service
       - media-service
-      - notification-service
     env_file:
       - .env
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ─── user-service (Identity & Access) ────────────
   user-service:
@@ -55,64 +56,64 @@ services:
       retries: 3
 
   # ─── friend-service (Social Graph) ───────────────
-  friend-service:
-    build: ./services/friend-service
-    ports:
-      - "${FRIEND_SERVICE_PORT:-5002}:5000"
-    env_file:
-      - .env
-    depends_on:
-      pg:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # friend-service:
+  #   build: ./services/friend-service
+  #   ports:
+  #     - "${FRIEND_SERVICE_PORT:-5002}:5000"
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     pg:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # ─── post-service (Content) ──────────────────────
-  post-service:
-    build: ./services/post-service
-    ports:
-      - "${POST_SERVICE_PORT:-5003}:5000"
-    env_file:
-      - .env
-    depends_on:
-      pg:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # post-service:
+  #   build: ./services/post-service
+  #   ports:
+  #     - "${POST_SERVICE_PORT:-5003}:5000"
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     pg:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # ─── chat-service (Messaging) ────────────────────
-  chat-service:
-    build: ./services/chat-service
-    ports:
-      - "${CHAT_SERVICE_PORT:-5004}:5000"
-    env_file:
-      - .env
-    depends_on:
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # chat-service:
+  #   build: ./services/chat-service
+  #   ports:
+  #     - "${CHAT_SERVICE_PORT:-5004}:5000"
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     mongo:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # ─── media-service (Media) ───────────────────────
   media-service:
@@ -129,30 +130,30 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   # ─── notification-service (Notification) ─────────
-  notification-service:
-    build: ./services/notification-service
-    ports:
-      - "${NOTIFICATION_SERVICE_PORT:-5006}:5000"
-    env_file:
-      - .env
-    depends_on:
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # notification-service:
+  #   build: ./services/notification-service
+  #   ports:
+  #     - "${NOTIFICATION_SERVICE_PORT:-5006}:5000"
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     mongo:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # ─── Infrastructure ─────────────────────────────
 
