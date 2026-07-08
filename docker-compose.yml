@@ -82,6 +82,8 @@ services:
       - "${POST_SERVICE_PORT:-5003}:5000"
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://${PG_USER:-socialhub}:${PG_PASSWORD:-socialhub_secret}@pg:5432/socialhub_post?schema=public
     depends_on:
       pg:
         condition: service_healthy
@@ -160,13 +162,14 @@ services:
   pg:
     image: postgres:16-alpine
     ports:
-      - "${PG_PORT:-5432}:5432"
+      - "${PG_HOST_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${PG_DATABASE:-socialhub}
       POSTGRES_USER: ${PG_USER:-socialhub}
       POSTGRES_PASSWORD: ${PG_PASSWORD:-socialhub_secret}
     volumes:
       - pg-data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql
     networks:
       - app-network
     healthcheck:
