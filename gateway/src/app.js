@@ -36,8 +36,8 @@ app.use((req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error('❌ Global error in API Gateway:', err);
-  
+  console.error('[ERROR] Global error in API Gateway:', err);
+
   res.status(err.statusCode || 500).json({
     success: false,
     error: err.name || 'InternalServerError',

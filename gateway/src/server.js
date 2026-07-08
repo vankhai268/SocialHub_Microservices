@@ -8,43 +8,42 @@ const startServer = async () => {
     if (redis.status !== 'ready' && redis.status !== 'connecting') {
       await redis.connect();
     }
-    
+
     // 2. Start Express server
     const server = app.listen(config.PORT, () => {
-      console.log(`🚀 API Gateway running in ${config.ENVIRONMENT} mode on port ${config.PORT}`);
-      console.log(`🔗 Routing user-service requests to: ${config.USER_SERVICE_URL}`);
-      console.log(`🔗 Routing media-service requests to: ${config.MEDIA_SERVICE_URL}`);
-      console.log(`🔗 Routing post-service requests to: ${config.POST_SERVICE_URL}`);
+      console.log(`[INFO] API Gateway running in ${config.ENVIRONMENT} mode on port ${config.PORT}`);
+      console.log(`[INFO] Routing user-service requests to: ${config.USER_SERVICE_URL}`);
+      console.log(`[INFO] Routing media-service requests to: ${config.MEDIA_SERVICE_URL}`);
     });
 
     // Graceful Shutdown
     const shutdown = (signal) => {
-      console.log(`\n📥 ${signal} received. Shutting down gracefully...`);
-      
+      console.log(`\n[INFO] ${signal} received. Shutting down gracefully...`);
+
       server.close(async () => {
-        console.log('🚪 HTTP server closed.');
+        console.log('[INFO] HTTP server closed.');
         try {
           await redis.quit();
-          console.log('🔌 Redis client disconnected.');
+          console.log('[INFO] Redis client disconnected.');
           process.exit(0);
         } catch (err) {
-          console.error('❌ Error disconnecting Redis during shutdown:', err.message);
+          console.error('[ERROR] Error disconnecting Redis during shutdown:', err.message);
           process.exit(1);
         }
       });
-      
+
       // Force shutdown after 10 seconds
       setTimeout(() => {
-        console.error('⚠️ Could not close connections in time, forcefully shutting down');
+        console.error('[WARN] Could not close connections in time, forcefully shutting down');
         process.exit(1);
       }, 10000);
     };
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
-    
+
   } catch (error) {
-    console.error('❌ Failed to start API Gateway:', error);
+    console.error('[ERROR] Failed to start API Gateway:', error);
     process.exit(1);
   }
 };

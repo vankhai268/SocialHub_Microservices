@@ -19,11 +19,10 @@ const breakerOptions = {
  */
 async function proxyRequest(serviceName, baseUrl, req, res, targetPath) {
   const targetUrl = `${baseUrl}${targetPath}`;
-  
-  // Prepare headers, injecting user ID if authenticated
+
   const headers = { ...req.headers };
-  delete headers.host; // Remove host header so target can set its own
-  
+  delete headers.host;
+
   if (req.user && req.user.id) {
     headers['x-user-id'] = req.user.id;
     if (req.user.jti) {
@@ -37,20 +36,16 @@ async function proxyRequest(serviceName, baseUrl, req, res, targetPath) {
     url: targetUrl,
     headers: headers,
     params: req.query,
-    data: req, // Pass the request stream directly
+    data: req,
     responseType: 'stream',
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
     validateStatus: (status) => {
-      // Treat >= 500 errors as errors for Circuit Breaker tracking (except some 500s if desired, but 5xx indicates server error)
-      // To trip the breaker, we must throw an error, so we reject status >= 500
       return status < 500;
     }
   });
 
-  // Copy response headers
   Object.keys(response.headers).forEach((key) => {
-    // Skip transfer-encoding chunked if we are piping to avoid duplicate headers
     if (key.toLowerCase() !== 'transfer-encoding') {
       res.setHeader(key, response.headers[key]);
     }
@@ -58,15 +53,14 @@ async function proxyRequest(serviceName, baseUrl, req, res, targetPath) {
 
   res.status(response.status);
   response.data.pipe(res);
-  
-  // Return resolved promise when stream ends
+
   return new Promise((resolve, reject) => {
     response.data.on('end', resolve);
     response.data.on('error', reject);
   });
 }
 
-// Create a Circuit Breaker for User Service
+// Circuit Breaker for User Service
 const userServiceBreaker = new CircuitBreaker(
   (req, res, targetPath) => proxyRequest('user-service', config.USER_SERVICE_URL, req, res, targetPath),
   breakerOptions
@@ -86,8 +80,8 @@ const postServiceBreaker = new CircuitBreaker(
 
 // Fallback handlers
 function handleFallback(serviceName, res, error) {
-  console.error(`❌ Circuit Breaker Triggered or Error occurred for ${serviceName}:`, error.message);
-  
+  console.error(`[ERROR] Circuit Breaker Triggered or Error occurred for ${serviceName}:`, error.message);
+
   res.status(503).json({
     success: false,
     error: 'Service Temporarily Unavailable',
@@ -106,9 +100,9 @@ postServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('pos
   { name: 'media-service', breaker: mediaServiceBreaker },
   { name: 'post-service', breaker: postServiceBreaker }
 ].forEach(({ name, breaker }) => {
-  breaker.on('open', () => console.warn(`🚨 Circuit Breaker [OPEN] for service: ${name}`));
-  breaker.on('halfOpen', () => console.log(`🔄 Circuit Breaker [HALF-OPEN] for service: ${name}`));
-  breaker.on('close', () => console.log(`❇️ Circuit Breaker [CLOSED] for service: ${name}`));
+  breaker.on('open', () => console.warn(`[INFO] Circuit Breaker [OPEN] for service: ${name}`));
+  breaker.on('halfOpen', () => console.log(`[INFO] Circuit Breaker [HALF-OPEN] for service: ${name}`));
+  breaker.on('close', () => console.log(`[INFO] Circuit Breaker [CLOSED] for service: ${name}`));
 });
 
 export const httpClientService = {

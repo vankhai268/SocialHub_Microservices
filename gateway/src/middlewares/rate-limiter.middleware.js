@@ -14,7 +14,7 @@ export const rateLimiter = (limit = 60, windowSeconds = 60) => {
 
       // Increment request count for this IP + Endpoint
       const current = await redis.incr(key);
-      
+
       if (current === 1) {
         await redis.expire(key, windowSeconds);
       }
@@ -26,7 +26,7 @@ export const rateLimiter = (limit = 60, windowSeconds = 60) => {
       if (current > limit) {
         const ttl = await redis.ttl(key);
         res.setHeader('Retry-After', ttl > 0 ? ttl : windowSeconds);
-        
+
         return res.status(429).json({
           success: false,
           error: 'Too Many Requests',
@@ -36,7 +36,7 @@ export const rateLimiter = (limit = 60, windowSeconds = 60) => {
 
       next();
     } catch (error) {
-      console.error('❌ Error in Gateway Rate Limiter Middleware:', error.message);
+      console.error('[ERROR] Error in Gateway Rate Limiter Middleware:', error.message);
       // Fail-safe: allow requests to pass through if Redis is having issues
       next();
     }

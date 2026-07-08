@@ -10,7 +10,7 @@ redis.on('connect', () => {
 });
 
 redis.on('error', (err) => {
-  console.error('❌ Redis connection error in API Gateway:', err.message);
+  console.error('[ERROR] Redis connection error in API Gateway:', err.message);
 });
 
 export default redis;
