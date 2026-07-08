@@ -8,7 +8,14 @@ const app = express();
 
 // Middlewares
 app.use(helmet());
-app.use(cors());
+// Configure CORS for direct browser upload
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json());
 

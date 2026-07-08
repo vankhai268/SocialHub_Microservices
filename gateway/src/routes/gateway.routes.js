@@ -30,4 +30,15 @@ router.get('/media/:id', protectRoute, mapToMediaService);
 router.get('/media/:id/url', protectRoute, mapToMediaService);
 router.delete('/media/:id', protectRoute, mapToMediaService);
 
+// --- post-service routes ---
+const mapToPostService = (req, res) => {
+  const targetPath = req.originalUrl.replace(/^\/api/, '');
+  return httpClientService.forwardToPostService(req, res, targetPath);
+};
+
+// Map all under /posts and /feed to post-service
+router.use('/posts', protectRoute, mapToPostService);
+router.use('/feed', protectRoute, mapToPostService);
+
+
 export default router;

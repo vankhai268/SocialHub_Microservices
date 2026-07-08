@@ -1,14 +1,15 @@
 import express from 'express';
 import { mediaController } from '../controllers/media.controller.js';
 import { uploadSingle } from '../middlewares/upload.middleware.js';
+import { protectRoute } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
 router.get('/health', mediaController.healthCheck);
-router.post('/media/upload', uploadSingle, mediaController.uploadMedia);
-router.post('/media/batch-urls', mediaController.getBatchUrls); // Phải nằm trước /:id
-router.get('/media/:id', mediaController.getMediaMetadata);
-router.get('/media/:id/url', mediaController.getPresignedUrl);
-router.delete('/media/:id', mediaController.deleteMedia);
+router.post('/media/upload', protectRoute, uploadSingle, mediaController.uploadMedia);
+router.post('/media/batch-urls', protectRoute, mediaController.getBatchUrls); 
+router.get('/media/:id', protectRoute, mediaController.getMediaMetadata);
+router.get('/media/:id/url', protectRoute, mediaController.getPresignedUrl);
+router.delete('/media/:id', protectRoute, mediaController.deleteMedia);
 
 export default router;

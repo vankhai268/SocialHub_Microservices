@@ -78,6 +78,12 @@ const mediaServiceBreaker = new CircuitBreaker(
   breakerOptions
 );
 
+// Create a Circuit Breaker for Post Service
+const postServiceBreaker = new CircuitBreaker(
+  (req, res, targetPath) => proxyRequest('post-service', config.POST_SERVICE_URL, req, res, targetPath),
+  breakerOptions
+);
+
 // Fallback handlers
 function handleFallback(serviceName, res, error) {
   console.error(`❌ Circuit Breaker Triggered or Error occurred for ${serviceName}:`, error.message);
@@ -92,11 +98,13 @@ function handleFallback(serviceName, res, error) {
 
 userServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('user-service', res, error));
 mediaServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('media-service', res, error));
+postServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('post-service', res, error));
 
 // Event listeners for monitoring/debugging
 [
   { name: 'user-service', breaker: userServiceBreaker },
-  { name: 'media-service', breaker: mediaServiceBreaker }
+  { name: 'media-service', breaker: mediaServiceBreaker },
+  { name: 'post-service', breaker: postServiceBreaker }
 ].forEach(({ name, breaker }) => {
   breaker.on('open', () => console.warn(`🚨 Circuit Breaker [OPEN] for service: ${name}`));
   breaker.on('halfOpen', () => console.log(`🔄 Circuit Breaker [HALF-OPEN] for service: ${name}`));
@@ -105,5 +113,6 @@ mediaServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('me
 
 export const httpClientService = {
   forwardToUserService: (req, res, targetPath) => userServiceBreaker.fire(req, res, targetPath),
-  forwardToMediaService: (req, res, targetPath) => mediaServiceBreaker.fire(req, res, targetPath)
+  forwardToMediaService: (req, res, targetPath) => mediaServiceBreaker.fire(req, res, targetPath),
+  forwardToPostService: (req, res, targetPath) => postServiceBreaker.fire(req, res, targetPath)
 };
