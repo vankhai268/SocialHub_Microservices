@@ -8,6 +8,7 @@ export const config = {
   PORT: process.env.PORT || 8000,
   USER_SERVICE_URL: process.env.USER_SERVICE_URL || 'http://user-service:5000',
   MEDIA_SERVICE_URL: process.env.MEDIA_SERVICE_URL || 'http://media-service:5000',
+  POST_SERVICE_URL: process.env.POST_SERVICE_URL || 'http://post-service:5000',
   JWT_SECRET: process.env.JWT_SECRET || 'your-jwt-secret-change-in-production',
   REDIS_URL: process.env.REDIS_URL || 'redis://redis:6379',
   

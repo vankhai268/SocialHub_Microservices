@@ -14,6 +14,7 @@ const startServer = async () => {
       console.log(`🚀 API Gateway running in ${config.ENVIRONMENT} mode on port ${config.PORT}`);
       console.log(`🔗 Routing user-service requests to: ${config.USER_SERVICE_URL}`);
       console.log(`🔗 Routing media-service requests to: ${config.MEDIA_SERVICE_URL}`);
+      console.log(`🔗 Routing post-service requests to: ${config.POST_SERVICE_URL}`);
     });
 
     // Graceful Shutdown
