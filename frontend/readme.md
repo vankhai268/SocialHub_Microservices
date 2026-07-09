@@ -1,54 +1,16 @@
-# Frontend
+# React + Vite
 
-## Overview
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-This is the frontend module of the microservices system. It provides the user interface and communicates with backend services through the API Gateway.
+Currently, two official plugins are available:
 
-## Tech Stack
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-| Component        | Choice               |
-|------------------|----------------------|
-| Framework        | *(e.g., React, Vue, Angular, Svelte, plain HTML/JS)* |
-| Styling          | *(e.g., CSS, Tailwind, Bootstrap, Material UI)*       |
-| Package Manager  | *(e.g., npm, yarn, pnpm)*                             |
-| Build Tool       | *(e.g., Vite, Webpack, esbuild)*                      |
+## React Compiler
 
-## Getting Started
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-```bash
-# From project root
-docker compose up frontend --build
+## Expanding the ESLint configuration
 
-# Or run locally (adapt to your stack)
-cd src/
-# npm install && npm run dev
-# yarn && yarn dev
-```
-
-## Project Structure
-
-```
-frontend/
-├── Dockerfile
-├── readme.md
-└── src/           # Your source code goes here
-```
-
-## Environment Variables
-
-| Variable       | Description                | Default                  |
-|----------------|----------------------------|--------------------------|
-| `API_BASE_URL` | URL of the API Gateway     | `http://localhost:8080`  |
-
-## Build for Production
-
-```bash
-# Example:
-# npm run build
-# yarn build
-```
-
-## Notes
-
-- All API calls should go through the **API Gateway** (`gateway`), not directly to individual services.
-- Configure proxy or API base URL to point to the gateway.
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
