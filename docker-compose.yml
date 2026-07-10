@@ -108,47 +108,47 @@ services:
   #     retries: 3
 
   # ─── post-service (Content) ──────────────────────
-  post-service:
-    build: ./services/post-service
-    ports:
-      - "${POST_SERVICE_PORT:-5003}:5000"
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://${PG_USER:-socialhub}:${PG_PASSWORD:-socialhub_secret}@pg:5432/socialhub_post?schema=public
-    depends_on:
-      pg:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # post-service:
+  #   build: ./services/post-service
+  #   ports:
+  #     - "${POST_SERVICE_PORT:-5003}:5000"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     DATABASE_URL: postgresql://${PG_USER:-socialhub}:${PG_PASSWORD:-socialhub_secret}@pg:5432/socialhub_post?schema=public
+  #   depends_on:
+  #     pg:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
-  chat-service:
-    build: ./services/chat-service
-    ports:
-      - "${CHAT_SERVICE_PORT:-5004}:5000"
-    env_file:
-      - .env
-    environment:
-      - MONGO_URI=mongodb://${MONGO_USER:-socialhub}:${MONGO_PASSWORD:-socialhub_secret}@mongo:27017/socialhub_chat?authSource=admin
-    depends_on:
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # chat-service:
+  #   build: ./services/chat-service
+  #   ports:
+  #     - "${CHAT_SERVICE_PORT:-5004}:5000"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - MONGO_URI=mongodb://${MONGO_USER:-socialhub}:${MONGO_PASSWORD:-socialhub_secret}@mongo:27017/socialhub_chat?authSource=admin
+  #   depends_on:
+  #     mongo:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # ─── media-service (Media) ───────────────────────
   # media-service:
