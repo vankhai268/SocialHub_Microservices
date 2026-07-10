@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const getBaseURL = () => {
-    return import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+    return (import.meta.env.VITE_API_URL || "http://localhost:8080") + '/api';
 };
 
 const api = axios.create({
@@ -31,9 +31,9 @@ api.interceptors.response.use(
         const originalRequest = error.config;
 
         // Kiểm tra xem request có phải là request xác thực không
-        const isAuthRequest = originalRequest.url.includes("/auth/login") || 
-                              originalRequest.url.includes("/auth/refresh") ||
-                              originalRequest.url.includes("/auth/register");
+        const isAuthRequest = originalRequest.url.includes("/auth/login") ||
+            originalRequest.url.includes("/auth/refresh") ||
+            originalRequest.url.includes("/auth/register");
 
         // Chỉ cố gắng refresh token cho các request KHÔNG phải xác thực bị lỗi 401
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthRequest) {
