@@ -1,168 +1,113 @@
-# notification-service
+# Notification Service — Architecture & Operations Guide
 
-> Dịch vụ quản lý và đẩy thông báo thời gian thực cho hệ thống SocialHub.
-
----
-
-## 📋 Tổng Quan (Overview)
-
-`notification-service` đảm nhận vai trò thu thập sự kiện bất đồng bộ từ các microservices khác, tổng hợp thông tin, lưu trữ thông báo và đẩy tới người dùng cuối trong thời gian thực.
-
-- **Bounded Context**: Notification Management
-- **Trách nhiệm chính**:
-  1. Lắng nghe các sự kiện tương tác người dùng (like, comment, kết bạn...) từ hệ thống.
-  2. Tạo bản ghi thông báo trong MongoDB.
-  3. Duy trì kết nối WebSocket và đẩy thông báo trực tiếp qua **Socket.IO** tới người dùng đang trực tuyến.
-  4. Cung cấp các REST API cho phép client truy vấn và đánh dấu đã đọc thông báo.
+Dịch vụ quản lý và đẩy thông báo thời gian thực cho hệ thống SocialHub.
 
 ---
 
-## 🛠️ Công Nghệ Sử Dụng (Tech Stack)
+## 📋 1. Kiến Trúc Hoạt Động (Architecture & Event Flow)
 
-- **Ngôn ngữ & Runtime**: Node.js 20 (ES Modules)
-- **Framework**: Express.js
-- **Cơ sở dữ liệu**: MongoDB (thông qua **Mongoose**)
-- **Message Broker**: RabbitMQ (`amqplib`) - Hệ thống hàng đợi xử lý sự kiện
-- **Pub/Sub Broker**: Redis (`ioredis`) - Lắng nghe kênh sự kiện thô
-- **Đẩy thời gian thực**: Socket.IO (Server)
-- **HTTP Client**: Axios (Gọi API User Service để giải quyết thông tin người dùng)
+Dịch vụ sử dụng mô hình kết hợp **Redis Pub/Sub** (để lắng nghe các sự kiện thô bất đồng bộ với độ trễ cực thấp) và **RabbitMQ** (để xếp hàng đợi đảm bảo tính bền vững - durability - của thông báo ngay cả khi service tạm dừng hoạt động).
 
----
-
-## 🔄 Luồng Sự Kiện Bất Đồng Bộ (Async Event Flow)
-
-Dịch vụ sử dụng kết hợp Redis Pub/Sub và RabbitMQ làm trục xương sống truyền nhận sự kiện:
+### Sơ Đồ Quy Trình Gửi Thông Báo (Event Pipeline)
 
 ```
-[friend-service]  ──(Redis Pub/Sub)──> [Event Bridge]
-[post-service]                         (Trong Notification Service)
-                                              │
-                                       (RabbitMQ Queue)
-                                              │
-                                              ▼
-[Socket.IO Client] <──(Realtime Push)── [MQ Consumer] ──> [MongoDB]
+[Các Dịch Vụ Khác] 
+   │ (Ví dụ: friend-service, post-service, chat-service)
+   ├─► Phát sự kiện thô lên kênh Redis Pub/Sub tương ứng (VD: 'post.liked', 'message.sent')
+   │
+   ▼
+[Event Bridge (Redis Subscriber)] ──── (Trong Notification Service)
+   │ 
+   ├─► Nhận sự kiện từ Redis Pub/Sub.
+   ├─► Bọc dữ liệu thành Envelope JSON chuẩn hóa.
+   ├─► Đưa vào hàng đợi RabbitMQ bền vững: 'notifications-queue'
+   │
+   ▼
+[RabbitMQ Broker Container] (Port 5672) ─ Hàng đợi bền vững lưu trữ sự kiện tạm thời.
+   │
+   ▼
+[MQ Consumer Worker] ─────────────────── (Trong Notification Service)
+   │
+   ├─► Nhận sự kiện từ hàng đợi 'notifications-queue'.
+   ├─► Gọi REST API tới user-service (POST /api/users/batch) lấy thông tin Actor (displayName, avatarUrl).
+   ├─► Lưu trữ dữ liệu thông báo hoàn chỉnh vào MongoDB.
+   ├─► Cập nhật và đẩy thông tin Socket.IO:
+   │     ├─ Emits 'notification:new' tới Room `user:{userId}` (nếu người nhận online).
+   │     └─ Emits 'notification:count' cập nhật số lượng tin chưa đọc.
+   │
+   ▼
+[Socket.IO Client (Browser)]
 ```
 
-### 1. Redis-to-RabbitMQ Event Bridge (`event-bridge.service.js`)
-Lắng nghe các sự kiện thô từ các dịch vụ khác trên Redis Pub/Sub và đưa vào hàng đợi bền vững của RabbitMQ:
-- **Kênh Redis đăng ký**:
-  - `friend.request.sent` — Có lời mời kết bạn mới.
-  - `friend.request.accepted` — Lời mời kết bạn được chấp nhận.
-  - `post.liked` — Có người thích bài viết.
-  - `post.commented` — Có người bình luận bài viết.
-  - `post.shared` — Có người chia sẻ bài viết.
-- **Hàng đợi RabbitMQ mục tiêu**: `notifications-queue` (Durable queue)
+### Các Kênh Sự Kiện Được Hỗ Trợ (Event Types)
 
-### 2. RabbitMQ Event Consumer (`rabbitmq.consumer.js`)
-Tiêu thụ các thông điệp từ `notifications-queue` và xử lý:
-1. Trích xuất thông tin định danh của người thực hiện hành động (`actorId`).
-2. Gửi request REST API nội bộ tới `user-service` (`POST /api/users/batch`) để lấy thông tin chi tiết của người thực hiện hành động (Tên hiển thị, Ảnh đại diện).
-3. Tạo và lưu bản ghi thông báo vào MongoDB.
-4. Đẩy sự kiện realtime tới người nhận thông qua Socket.IO room `user:{userId}`.
-
----
-
-## 💾 Cấu Trúc Dữ Liệu Thông Báo (MongoDB Schema)
-
-Mỗi bản ghi thông báo bao gồm các trường sau:
-
-```javascript
-{
-  userId: String,        // ID người nhận thông báo (UUID)
-  type: String,          // Phân loại: friend_request, friend_accepted, post_liked, post_commented, post_shared
-  message: String,       // Nội dung thông báo hiển thị (ví dụ: "Nguyễn Văn A đã thích bài viết của bạn.")
-  fromUser: {            // Thông tin người thực hiện hành động
-    id: String,
-    displayName: String,
-    avatarUrl: String
-  },
-  referenceId: String,   // ID đối tượng liên quan (postId, requestId...)
-  referenceType: String, // Loại đối tượng liên quan (post, friend_request...)
-  isRead: Boolean,       // Trạng thái đã đọc (mặc định: false)
-  createdAt: Date        // Thời gian tạo
-}
-```
-
----
-
-## 🔌 Giao Thức Kết Nối WebSockets (Socket.IO API)
-
-Client thiết lập kết nối thời gian thực qua Gateway hoặc trực tiếp tới service:
-
-- **Địa chỉ**: `ws://localhost:8080` (Cổng Gateway) hoặc `ws://localhost:5006` (Trực tiếp)
-- **Đường dẫn (Path)**: `/socket.io/`
-- **Xác thực**: Gửi JWT token qua đối tượng handshake auth:
-  ```json
-  {
-    "auth": {
-      "token": "Bearer <JWT-Access-Token>"
-    }
-  }
-  ```
-- **Hành vi kết nối**: Sau khi verify token thành công, Socket sẽ tự động tham gia vào phòng (Room) riêng biệt: `user:{userId}`.
-
-### Sự kiện Server gửi xuống Client (Server-to-Client Events)
-1. **`notification:new`**: Phát ra khi có thông báo mới được tạo cho người dùng này.
-   - **Payload**:
-     ```json
-     {
-       "id": "6a4f1b8...",
-       "type": "friend_request",
-       "message": "User A đã gửi lời mời kết bạn.",
-       "fromUser": {
-         "id": "9f247bd...",
-         "displayName": "User A",
-         "avatarUrl": null
-       },
-       "referenceId": "f09b92...",
-       "referenceType": "friend_request",
-       "isRead": false,
-       "createdAt": "2026-07-09T03:54:55.898Z"
-     }
-     ```
-2. **`notification:count`**: Phát ra khi số lượng thông báo chưa đọc của người dùng thay đổi (khi có thông báo mới hoặc khi đánh dấu đã đọc).
-   - **Payload**: `{ "unreadCount": 3 }`
-
----
-
-## 📖 REST API Endpoints
-
-Mọi endpoint (ngoại trừ health check) đều yêu cầu Client truyền kèm Header: `x-user-id` (do Gateway tự động xác thực JWT và chèn vào).
-
-| Method | Endpoint | Description | Auth |
+| Nguồn Sự Kiện | Kênh Redis | Kiểu Thông Báo (Mongo) | Mô Tả Nội Dung |
 |---|---|---|---|
-| **GET** | `/health` | Kiểm tra sức khỏe của dịch vụ | ❌ Public |
-| **GET** | `/notifications` | Lấy danh sách thông báo phân trang của user | ✅ JWT |
-| **GET** | `/notifications/unread-count` | Lấy tổng số thông báo chưa đọc | ✅ JWT |
-| **PUT** | `/notifications/read-all` | Đánh dấu tất cả thông báo là đã đọc | ✅ JWT |
-| **PUT** | `/notifications/:id/read` | Đánh dấu một thông báo cụ thể là đã đọc | ✅ JWT |
+| **friend-service** | `friend.request.sent` | `friend_request` | `<Actor> đã gửi lời mời kết bạn.` |
+| **friend-service** | `friend.request.accepted` | `friend_accepted` | `<Actor> đã chấp nhận lời mời kết bạn.` |
+| **post-service** | `post.liked` | `post_liked` | `<Actor> đã thích bài viết của bạn.` |
+| **post-service** | `post.commented` | `post_commented` | `<Actor> đã bình luận bài viết của bạn.` |
+| **post-service** | `post.shared` | `post_shared` | `<Actor> đã chia sẻ bài viết của bạn.` |
+| **chat-service** | `message.sent` | `new_message` | `<Actor> đã gửi tin nhắn: "<preview>"` |
+| **chat-service** | `group.member.added` | `group_added` | `<Actor> đã thêm bạn vào nhóm "<groupName>".` |
 
 ---
 
-## ⚙️ Biến Môi Trường (Environment Variables)
+## 🔌 2. Kết Nối WebSockets Qua Gateway
 
-File cấu hình `.env` của service chứa các thông số:
-
-```env
-PORT=5006
-MONGO_URI=mongodb://socialhub:socialhub_secret@localhost:27018/socialhub?authSource=admin
-REDIS_URL=redis://localhost:6379
-RABBITMQ_URL=amqp://localhost:5672
-JWT_SECRET=your-jwt-secret-change-in-production
-USER_SERVICE_URL=http://localhost:5001
-```
+Client thiết lập kết nối thời gian thực qua Gateway:
+- **Địa chỉ**: `ws://localhost:8080`
+- **Đường dẫn (Path)**: `/notification/socket.io/` (Gateway sẽ tự động map và loại bỏ tiền tố này khi chuyển tiếp tới `notification-service` ở cổng `5006`).
+- **Handshake Auth**: `{ "token": "Bearer <JWT-Access-Token>" }`
 
 ---
 
-## 🚀 Hướng Dẫn Chạy Local
+## 📊 3. Hướng Dẫn Giám Sát Qua Giao Diện Quản Trị RabbitMQ
 
-1. Đảm bảo hạ tầng Docker (MongoDB, Redis, RabbitMQ) đang chạy ở máy host.
-2. Di chuyển vào thư mục và cài đặt thư viện:
-   ```bash
-   cd services/notification-service
-   npm install
-   ```
-3. Chạy môi trường phát triển (Hot-reload):
-   ```bash
-   npm run dev
-   ```
+Khi docker infrastructure đang chạy (`docker compose up -d`), bạn có thể giám sát toàn bộ hoạt động xếp hàng đợi của thông báo trực tiếp qua RabbitMQ Management Console.
+
+### Cách Truy Cập:
+- **Đường dẫn**: [http://localhost:15672](http://localhost:15672)
+- **Tài khoản mặc định**: 
+  - *Username*: `socialhub`
+  - *Password*: `socialhub_secret`
+
+### Các Điểm Giám Sát Quan Trọng (Observation Guides):
+
+#### 1. Theo Dõi Hàng Đợi (Queues):
+- Truy cập tab **Queues and Streams** từ menu trên cùng.
+- Bạn sẽ nhìn thấy hàng đợi tên là **`notifications-queue`**.
+- Các thông số cần quan tâm:
+  - **State**: Trạng thái hàng đợi (thường là `running`).
+  - **Ready**: Số lượng thông điệp đang nằm trong hàng đợi chờ được Consumer xử lý (nếu số này tăng cao liên tục, chứng tỏ consumer đang xử lý chậm hoặc đang bị dừng).
+  - **Unacked**: Số lượng thông điệp đã gửi cho consumer nhưng chưa nhận được phản hồi xác nhận (`ack`).
+  - **Total**: Tổng số lượng thông điệp trong queue.
+
+#### 2. Biểu Đồ Tốc Độ Xử Lý (Message Rates):
+- Click trực tiếp vào hàng đợi `notifications-queue` để xem chi tiết.
+- Bạn sẽ thấy biểu đồ thời gian thực hiển thị:
+  - **Publish rate**: Tốc độ đẩy tin từ Event Bridge vào Queue (sự kiện mới xuất hiện).
+  - **Deliver / Get rate**: Tốc độ consumer lấy tin ra và xử lý.
+  - **Acknowledge rate**: Tốc độ consumer phản hồi hoàn thành xử lý.
+
+#### 3. Test Đẩy Tin Thủ Công (Publish Message):
+- Bạn có thể mô phỏng một sự kiện trực tiếp trên giao diện quản trị để test dịch vụ:
+  - Cuộn xuống phần **Publish message**.
+  - Phần **Payload**, nhập dữ liệu JSON mô phỏng (ví dụ về sự kiện thích bài viết):
+    ```json
+    {
+      "channel": "post.liked",
+      "payload": {
+        "userId": "d748f655-46b5-4b02-aa92-3bc374828b8b",
+        "postId": "postId-123-abc",
+        "postAuthorId": "<your-user-uuid-currently-online>"
+      },
+      "bridgedAt": "2026-07-10T12:00:00.000Z"
+    }
+    ```
+  - Click **Publish message**. Notification Service sẽ nhận được ngay lập tức, ghi nhận vào MongoDB và bắn Socket.IO realtime báo động.
+
+#### 4. Xem Dữ Liệu Chờ Trong Queue (Get Messages):
+- Cuộn xuống phần **Get messages** trong trang chi tiết queue.
+- Chọn số lượng tin muốn xem ở ô **Messages**.
+- Click **Get Message(s)**. Bạn có thể xem trực tiếp nội dung các tin nhắn JSON đang xếp hàng đợi mà chưa được xử lý (đặc biệt hữu ích khi debug lỗi xử lý bất đồng bộ).

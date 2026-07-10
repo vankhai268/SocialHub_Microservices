@@ -1,6 +1,6 @@
 import http from 'http';
 import app from './app.js';
-import {config} from './config/index.js';
+import { config } from './config/index.js';
 import redis from './config/redis.js';
 import httpProxy from 'http-proxy';
 
@@ -11,17 +11,17 @@ const wsProxy = httpProxy.createProxyServer({
 });
 
 wsProxy.on('error', (err) => {
-  console.error('❌ Gateway WS Proxy Error:', err.message);
+  console.error('[ERROR] Gateway WS Proxy Error:', err.message);
 });
 
 const startServer = async () => {
   try {
-    // 1. Verify Redis connection is ready
+    // Verify Redis connection is ready
     if (redis.status !== 'ready' && redis.status !== 'connecting') {
       await redis.connect();
     }
 
-    // 2. Start Express server
+    // Start Express server
     const server = app.listen(config.PORT, () => {
       console.log(`[INFO] API Gateway running in ${config.ENVIRONMENT} mode on port ${config.PORT}`);
       console.log(`[INFO] Routing user-service requests to: ${config.USER_SERVICE_URL}`);
@@ -31,53 +31,56 @@ const startServer = async () => {
       console.log(`[INFO] Routing notification-service requests to: ${config.NOTIFICATION_SERVICE_URL}`);
     });
 
-    // 3. Handle WebSocket upgrades for Socket.IO proxying
+    // Handle WebSocket upgrades for Socket.IO proxying
     server.on('upgrade', (req, socket, head) => {
-      if (req.url.startsWith('/socket.io/')) {
-        const targetUrl = new URL(config.NOTIFICATION_SERVICE_URL);
-        const targetPort = targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80);
-        const targetHost = targetUrl.hostname;
+      let targetServiceUrl = null;
+      let targetPath = req.url;
 
-        const proxyReq = http.request({
-          host: targetHost,
-          port: targetPort,
-          path: req.url,
-          method: req.method,
-          headers: req.headers
-        });
-
-        proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
-          socket.write('HTTP/1.1 101 Switching Protocols\r\n');
-          Object.keys(proxyRes.headers).forEach((key) => {
-            socket.write(`${key}: ${proxyRes.headers[key]}\r\n`);
-          });
-          socket.write('\r\n');
-
-          proxySocket.pipe(socket).pipe(proxySocket);
-        });
-
-        proxyReq.on('error', (err) => {
-          console.error('[ERROR] WS Proxy Upgrade Error:', err.message);
-          socket.end();
-        });
-
-        proxyReq.end();
-      } else {
-        socket.end();
-        console.log(`🚀 API Gateway running in ${config.ENVIRONMENT} mode on port ${config.PORT}`);
-        console.log(`🔗 Routing user-service requests to: ${config.USER_SERVICE_URL}`);
-        console.log(`🔗 Routing media-service requests to: ${config.MEDIA_SERVICE_URL}`);
-        console.log(`🔗 Routing post-service requests to: ${config.POST_SERVICE_URL}`);
-        console.log(`🔗 Routing chat-service requests to: ${config.CHAT_SERVICE_URL}`);
+      if (req.url && req.url.startsWith('/notification/socket.io/')) {
+        targetServiceUrl = config.NOTIFICATION_SERVICE_URL;
+        targetPath = req.url.replace(/^\/notification/, '');
+      } else if (req.url && req.url.startsWith('/chat/socket.io/')) {
+        targetServiceUrl = config.CHAT_SERVICE_URL;
+        targetPath = req.url.replace(/^\/chat/, '');
       }
-    });
 
-    // Proxy incoming WebSocket/Socket.IO connections to chat-service
-    server.on('upgrade', (req, socket, head) => {
-      if (req.url && req.url.startsWith('/socket.io')) {
-        wsProxy.ws(req, socket, head);
+      if (targetServiceUrl) {
+        try {
+          const targetUrl = new URL(targetServiceUrl);
+          const targetPort = targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80);
+          const targetHost = targetUrl.hostname;
+
+          const proxyReq = http.request({
+            host: targetHost,
+            port: targetPort,
+            path: targetPath,
+            method: req.method,
+            headers: req.headers
+          });
+
+          proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+            socket.write('HTTP/1.1 101 Switching Protocols\r\n');
+            Object.keys(proxyRes.headers).forEach((key) => {
+              socket.write(`${key}: ${proxyRes.headers[key]}\r\n`);
+            });
+            socket.write('\r\n');
+
+            proxySocket.pipe(socket).pipe(proxySocket);
+          });
+
+          proxyReq.on('error', (err) => {
+            console.error('[ERROR] WS Proxy Upgrade Error:', err.message);
+            socket.end();
+          });
+
+          proxyReq.end();
+        } catch (err) {
+          console.error('[ERROR] Failed to upgrade WS connection:', err.message);
+          socket.end();
+        }
       } else {
-        socket.destroy();
+        console.warn(`[WARN] WS Upgrade request received for unsupported path: ${req.url}`);
+        socket.end();
       }
     });
 

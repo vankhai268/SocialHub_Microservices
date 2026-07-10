@@ -18,12 +18,12 @@ async function runTest() {
     const reg1 = await axios.post(`${GATEWAY_URL}/auth/register`, {
       email: user1Email,
       password,
-      displayName: 'Alice Cooper'
+      name: 'Alice Cooper'
     });
     const reg2 = await axios.post(`${GATEWAY_URL}/auth/register`, {
       email: user2Email,
       password,
-      displayName: 'Bob Marley'
+      name: 'Bob Marley'
     });
 
     const user1Id = reg1.data.user.id;
@@ -36,8 +36,8 @@ async function runTest() {
     const login1 = await axios.post(`${GATEWAY_URL}/auth/login`, { email: user1Email, password });
     const login2 = await axios.post(`${GATEWAY_URL}/auth/login`, { email: user2Email, password });
 
-    const token1 = login1.data.accessToken;
-    const token2 = login2.data.accessToken;
+    const token1 = login1.data.tokens.accessToken;
+    const token2 = login2.data.tokens.accessToken;
     console.log('✅ Access tokens retrieved successfully');
 
     // 3. Create a 1-1 conversation between Alice and Bob
@@ -55,11 +55,13 @@ async function runTest() {
     console.log('\n[WS] Step 4: Connecting both Alice & Bob sockets to Gateway WebSocket proxy...');
     
     const socket1 = io(WS_GATEWAY_URL, {
+      path: '/chat/socket.io/',
       auth: { token: `Bearer ${token1}` },
       transports: ['websocket']
     });
 
     const socket2 = io(WS_GATEWAY_URL, {
+      path: '/chat/socket.io/',
       auth: { token: `Bearer ${token2}` },
       transports: ['websocket']
     });

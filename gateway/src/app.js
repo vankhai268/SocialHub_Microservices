@@ -3,16 +3,17 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import gatewayRoutes from './routes/gateway.routes.js';
+import swaggerRoutes from './routes/swagger.routes.js';
 import { rateLimiter } from './middlewares/rate-limiter.middleware.js';
 
 const app = express();
 
-// Base Middlewares
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+}));
 app.use(cors());
 app.use(morgan('dev'));
 
-// Health check endpoint for Gateway
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -21,11 +22,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Apply rate limiting & mount Gateway routes under /api
-// Limit to 100 requests per minute per endpoint/IP
+app.use('/api-docs', swaggerRoutes);
 app.use('/api', rateLimiter(100, 60), gatewayRoutes);
 
-// 404 Handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -34,7 +33,6 @@ app.use((req, res) => {
   });
 });
 
-// Global Error Handler
 app.use((err, req, res, next) => {
   console.error('[ERROR] Global error in API Gateway:', err);
 

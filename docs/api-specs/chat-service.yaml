@@ -446,12 +446,12 @@ x-async-events:
       message:
         name: MessageSentEvent
         fields:
-          - name: eventId,        type: string (uuid)
-          - name: senderId,       type: string (uuid)
-          - name: conversationId, type: string
-          - name: recipientId,    type: string (uuid), description: Offline recipient to notify
-          - name: preview,        type: string, description: First 100 chars of message
-          - name: occurredAt,     type: string (ISO-8601 datetime)
+          - { name: eventId,        type: string (uuid) }
+          - { name: senderId,       type: string (uuid) }
+          - { name: conversationId, type: string }
+          - { name: recipientId,    type: string (uuid), description: Offline recipient to notify }
+          - { name: preview,        type: string, description: First 100 chars of message }
+          - { name: occurredAt,     type: string (ISO-8601 datetime) }
 
     - channel: group.member.added
       description: Emitted when a new member is added to a group chat
@@ -459,12 +459,12 @@ x-async-events:
       message:
         name: GroupMemberAddedEvent
         fields:
-          - name: eventId,       type: string (uuid)
-          - name: groupId,       type: string
-          - name: groupName,     type: string
-          - name: addedUserId,   type: string (uuid)
-          - name: addedByUserId, type: string (uuid)
-          - name: occurredAt,    type: string (ISO-8601 datetime)
+          - { name: eventId,       type: string (uuid) }
+          - { name: groupId,       type: string }
+          - { name: groupName,     type: string }
+          - { name: addedUserId,   type: string (uuid) }
+          - { name: addedByUserId, type: string (uuid) }
+          - { name: occurredAt,    type: string (ISO-8601 datetime) }
 
 # =======================================================================
 # Shared Schemas
