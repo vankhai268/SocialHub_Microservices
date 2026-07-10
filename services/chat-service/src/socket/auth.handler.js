@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
-import { fetchUserById } from '../utils/api.js';
+import { fetchUsersBatch } from '../utils/api.js';
 
 /**
  * Socket.IO authentication middleware
@@ -22,8 +22,9 @@ export const socketAuthMiddleware = async (socket, next) => {
     const decoded = jwt.verify(token, config.JWT_SECRET);
     const userId = decoded.id;
 
-    // Fetch user details for realtime message sender meta info
-    const user = await fetchUserById(userId);
+    // Fetch user details for realtime message sender meta info via public batch API
+    const users = await fetchUsersBatch([userId]);
+    const user = users && users[0];
     if (!user) {
       return next(new Error('Authentication error: User not found in system'));
     }

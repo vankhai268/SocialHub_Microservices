@@ -11,7 +11,7 @@ export const fetchUsersBatch = async (userIds) => {
     if (!userIds || userIds.length === 0) return [];
     
     // Call user-service batch endpoint
-    const response = await axios.post(`${config.USER_SERVICE_URL}/users/batch`, { userIds });
+    const response = await axios.post(`${config.USER_SERVICE_URL}/api/users/batch`, { userIds });
     
     if (response.data && response.data.success) {
       return response.data.users;
@@ -30,7 +30,7 @@ export const fetchUsersBatch = async (userIds) => {
  */
 export const fetchUserById = async (userId) => {
   try {
-    const response = await axios.get(`${config.USER_SERVICE_URL}/users/${userId}`);
+    const response = await axios.get(`${config.USER_SERVICE_URL}/api/users/${userId}`);
     if (response.data && response.data.success) {
       return response.data.user;
     }
