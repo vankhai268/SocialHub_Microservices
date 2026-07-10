@@ -75,7 +75,6 @@ media-service/
 ├── .dockerignore
 ├── package.json
 ├── readme.md
-├── plan.md
 └── src/
     ├── server.js                    # Entry point — kết nối DB, MinIO, khởi động server
     ├── app.js                       # Express setup — middleware, routes, error handler
@@ -85,11 +84,12 @@ media-service/
     ├── models/
     │   └── media.model.js           # Mongoose Schema cho MediaAsset
     ├── services/
-    │   └── minio.service.js         # MinIO client — upload, presign, delete, health
+    │   ├── minio.service.js         # Thao tác với MinIO
+    │   └── media.service.js         # Logic nghiệp vụ & tương tác MongoDB
     ├── middlewares/
     │   └── upload.middleware.js     # Multer config — file type + size validation
     ├── controllers/
-    │   └── media.controller.js      # Request handlers — orchestrate service + model
+    │   └── media.controller.js      # Request handlers — nhận request và đẩy xuống tầng Service
     ├── routes/
     │   └── media.routes.js          # Route definitions
     └── utils/
@@ -167,4 +167,3 @@ Khi hệ thống đang chạy, bạn có thể truy cập giao diện web của 
 3. File được tổ chức theo cấu trúc: `{userId}/{uuid}.{ext}`
 
 > **Lưu ý:** Cổng `9000` là cổng API dành cho code (không dùng trực tiếp). Cổng `9001` là giao diện quản trị web.
-

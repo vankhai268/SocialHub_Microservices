@@ -11,9 +11,10 @@ export const config = {
   POST_SERVICE_URL: process.env.POST_SERVICE_URL || 'http://post-service:5000',
   FRIEND_SERVICE_URL: process.env.FRIEND_SERVICE_URL || 'http://friend-service:5000',
   NOTIFICATION_SERVICE_URL: process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:5000',
+  CHAT_SERVICE_URL: process.env.CHAT_SERVICE_URL || 'http://chat-service:5000',
   JWT_SECRET: process.env.JWT_SECRET || 'your-jwt-secret-change-in-production',
   REDIS_URL: process.env.REDIS_URL || 'redis://redis:6379',
-  
+
   // Circuit Breaker default options
   CIRCUIT_BREAKER_TIMEOUT: parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT, 10) || 5000, // 5s
   CIRCUIT_BREAKER_ERROR_THRESHOLD: parseInt(process.env.CIRCUIT_BREAKER_ERROR_THRESHOLD, 10) || 50, // 50%

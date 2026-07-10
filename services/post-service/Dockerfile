@@ -1,4 +1,6 @@
-FROM node:18-alpine
+FROM node:20-slim
+
+RUN apt-get update -y && apt-get install -y openssl
 
 WORKDIR /usr/src/app
 
@@ -6,6 +8,7 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
+RUN npx prisma generate
 
 EXPOSE 5000
 
@@ -46,3 +49,4 @@ CMD ["npm", "start"]
 
 # # 10. Chạy trực tiếp bằng lệnh node thay vì npm start
 # CMD ["node", "src/index.js"]
+CMD ["sh", "-c", "npx prisma db push && npm start"]

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import CircuitBreaker from 'opossum';
-import { config } from '../config/index.js';
+import {config} from '../config/index.js';
 
 // Default options for circuit breakers
 const breakerOptions = {
@@ -20,7 +20,7 @@ const breakerOptions = {
 async function proxyRequest(serviceName, baseUrl, req, res, targetPath) {
   const targetUrl = `${baseUrl}${targetPath}`;
 
-  const headers = { ...req.headers };
+  const headers = {...req.headers};
   delete headers.host;
 
   if (req.user && req.user.id) {
@@ -87,6 +87,10 @@ const friendServiceBreaker = new CircuitBreaker(
 // Create a Circuit Breaker for Notification Service
 const notificationServiceBreaker = new CircuitBreaker(
   (req, res, targetPath) => proxyRequest('notification-service', config.NOTIFICATION_SERVICE_URL, req, res, targetPath),
+);
+// Create a Circuit Breaker for Chat Service
+const chatServiceBreaker = new CircuitBreaker(
+  (req, res, targetPath) => proxyRequest('chat-service', config.CHAT_SERVICE_URL, req, res, targetPath),
   breakerOptions
 );
 
@@ -107,15 +111,17 @@ mediaServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('me
 postServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('post-service', res, error));
 friendServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('friend-service', res, error));
 notificationServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('notification-service', res, error));
+chatServiceBreaker.fallback((req, res, targetPath, error) => handleFallback('chat-service', res, error));
 
 // Event listeners for monitoring/debugging
 [
-  { name: 'user-service', breaker: userServiceBreaker },
-  { name: 'media-service', breaker: mediaServiceBreaker },
-  { name: 'post-service', breaker: postServiceBreaker },
-  { name: 'friend-service', breaker: friendServiceBreaker },
-  { name: 'notification-service', breaker: notificationServiceBreaker }
-].forEach(({ name, breaker }) => {
+  {name: 'user-service', breaker: userServiceBreaker},
+  {name: 'media-service', breaker: mediaServiceBreaker},
+  {name: 'post-service', breaker: postServiceBreaker},
+  {name: 'friend-service', breaker: friendServiceBreaker},
+  {name: 'notification-service', breaker: notificationServiceBreaker},
+  {name: 'chat-service', breaker: chatServiceBreaker}
+].forEach(({name, breaker}) => {
   breaker.on('open', () => console.warn(`[INFO] Circuit Breaker [OPEN] for service: ${name}`));
   breaker.on('halfOpen', () => console.log(`[INFO] Circuit Breaker [HALF-OPEN] for service: ${name}`));
   breaker.on('close', () => console.log(`[INFO] Circuit Breaker [CLOSED] for service: ${name}`));
@@ -126,5 +132,6 @@ export const httpClientService = {
   forwardToMediaService: (req, res, targetPath) => mediaServiceBreaker.fire(req, res, targetPath),
   forwardToPostService: (req, res, targetPath) => postServiceBreaker.fire(req, res, targetPath),
   forwardToFriendService: (req, res, targetPath) => friendServiceBreaker.fire(req, res, targetPath),
-  forwardToNotificationService: (req, res, targetPath) => notificationServiceBreaker.fire(req, res, targetPath)
+  forwardToNotificationService: (req, res, targetPath) => notificationServiceBreaker.fire(req, res, targetPath),
+  forwardToChatService: (req, res, targetPath) => chatServiceBreaker.fire(req, res, targetPath)
 };

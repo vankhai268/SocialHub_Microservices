@@ -15,6 +15,7 @@
 | Language   | Node.js (ESM)      |
 | Framework  | Express.js         |
 | Database   | PostgreSQL         |
+| ORM        | Prisma ORM (v5)    |
 | Cache      | Redis              |
 
 ## API Endpoints
@@ -51,12 +52,16 @@ post-service/
 ├── Dockerfile
 ├── package.json
 ├── readme.md
+├── prisma/
+│   └── schema.prisma # Prisma database schema definition
 └── src/
-    ├── config/       # Connection configurations (db, redis)
-    ├── controllers/  # API business logic handlers (post, feed, like, comment, share)
+    ├── config/       # Connection configurations (db via Prisma, redis)
+    ├── controllers/  # API entrypoints (req/res parsing)
+    ├── services/     # Core business logic & cross-service communication
+    ├── repositories/ # Database interactions (Prisma queries)
     ├── middleware/   # Request interception (auth context extraction)
     ├── routes/       # Endpoint routing definitions
-    └── utils/        # Utilities (standardized response, inter-service API calls)
+    └── utils/        # Utilities (custom errors, standard response format)
 ```
 
 ## Environment Variables
@@ -64,11 +69,7 @@ post-service/
 | Variable             | Description                          | Default                               |
 |----------------------|--------------------------------------|---------------------------------------|
 | `PORT`               | Port of the service                  | 5000                                  |
-| `PG_HOST`            | PostgreSQL database host             | localhost                             |
-| `PG_PORT`            | PostgreSQL database port             | 5432                                  |
-| `PG_DATABASE`        | PostgreSQL database name             | socialhub                             |
-| `PG_USER`            | PostgreSQL username                  | socialhub                             |
-| `PG_PASSWORD`        | PostgreSQL password                  | socialhub_secret                      |
+| `DATABASE_URL`       | Prisma Postgres connection string    | postgresql://socialhub:socialhub_secret@localhost:5432/socialhub?schema=public |
 | `REDIS_URL`          | Redis connection string              | redis://localhost:6379                |
 | `USER_SERVICE_URL`   | Internal URL to user-service         | http://user-service:5000              |
 | `MEDIA_SERVICE_URL`  | Internal URL to media-service        | http://media-service:5000             |

@@ -21,8 +21,8 @@ export const getUserProfile = async (userId, token) => {
     }
 
     // 2. Fetch from user-service
-    // user-service route: GET /users/:id (protected route, needs token)
-    const response = await axios.get(`${USER_SERVICE_URL}/users/${userId}`, {
+    // user-service route: GET /api/users/:id (protected route, needs token)
+    const response = await axios.get(`${USER_SERVICE_URL}/api/users/${userId}`, {
       headers: {
         Authorization: token // Forward the JWT token
       }

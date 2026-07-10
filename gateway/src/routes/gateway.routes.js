@@ -1,6 +1,6 @@
 import express from 'express';
-import { protectRoute } from '../middlewares/auth.middleware.js';
-import { httpClientService } from '../services/http-client.service.js';
+import {protectRoute} from '../middlewares/auth.middleware.js';
+import {httpClientService} from '../services/http-client.service.js';
 
 const router = express.Router();
 
@@ -51,5 +51,14 @@ const mapToNotificationService = (req, res) => {
   return httpClientService.forwardToNotificationService(req, res, targetPath);
 };
 router.use('/notifications', protectRoute, mapToNotificationService);
+// --- chat-service routes ---
+const mapToChatService = (req, res) => {
+  const targetPath = req.originalUrl.replace(/^\/api/, '');
+  return httpClientService.forwardToChatService(req, res, targetPath);
+};
+
+// Map /conversations and /groups to chat-service
+router.use('/conversations', protectRoute, mapToChatService);
+router.use('/groups', protectRoute, mapToChatService);
 
 export default router;
