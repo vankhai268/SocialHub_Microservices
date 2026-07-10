@@ -13,7 +13,7 @@ async function runNotificationTests() {
   let userBId = '';
   let socket = null;
 
-  // 1. Register User A
+  // Register User A
   const emailA = `usera-${Date.now()}@example.com`;
   try {
     const res = await axios.post(`${GATEWAY_URL}/auth/register`, {
@@ -48,7 +48,7 @@ async function runNotificationTests() {
   // 3. Connect User B Socket.IO client via Gateway Proxy
   console.log('🔌 Connecting User B Socket.IO client to Gateway...');
   socket = io(GATEWAY_SOCKET_URL, {
-    path: '/socket.io/',
+    path: '/notification/socket.io/',
     auth: {
       token: `Bearer ${userBToken}`
     },
@@ -62,7 +62,7 @@ async function runNotificationTests() {
 
   socket.on('connect', () => {
     console.log('✅ User B Socket connected successfully to Gateway WebSocket proxy!');
-    
+
     // Trigger friend request from User A to User B
     sendFriendRequest();
   });
@@ -124,7 +124,7 @@ async function runNotificationTests() {
       // Get all notifications
       let res = await axios.get(`${GATEWAY_URL}/notifications`, { headers });
       console.log('✅ Get notifications list success. Count:', res.data.data.length);
-      
+
       const found = res.data.data.find(n => n.id === receivedNotificationId);
       if (!found) {
         console.error('❌ Rest API failed: Notification ID not found in REST response');
@@ -144,7 +144,7 @@ async function runNotificationTests() {
       // Verify unread count is updated
       res = await axios.get(`${GATEWAY_URL}/notifications/unread-count`, { headers });
       console.log('✅ Get unread count after read success:', res.data.unreadCount);
-      
+
       console.log('\n🎉 ALL REALTIME NOTIFICATION & INTEGRATION TESTS PASSED SUCCESSFULLY! 🎉');
       cleanupAndExit(0);
     } catch (err) {

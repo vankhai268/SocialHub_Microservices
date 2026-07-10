@@ -176,6 +176,48 @@ export const startConsumer = async () => {
             break;
           }
 
+          case 'message.sent': {
+            const { senderId, conversationId, recipientId, preview } = payload;
+            recipientId = recipientId;
+            actorId = senderId;
+
+            const actor = await getUserDetails(actorId);
+            notificationData = {
+              userId: recipientId,
+              type: 'new_message',
+              message: `${actor.displayName} đã gửi tin nhắn: "${preview}"`,
+              fromUser: {
+                id: actor.id,
+                displayName: actor.displayName,
+                avatarUrl: actor.avatarUrl
+              },
+              referenceId: conversationId,
+              referenceType: 'conversation'
+            };
+            break;
+          }
+
+          case 'group.member.added': {
+            const { groupId, groupName, addedUserId, addedByUserId } = payload;
+            recipientId = addedUserId;
+            actorId = addedByUserId;
+
+            const actor = await getUserDetails(actorId);
+            notificationData = {
+              userId: recipientId,
+              type: 'group_added',
+              message: `${actor.displayName} đã thêm bạn vào nhóm "${groupName}".`,
+              fromUser: {
+                id: actor.id,
+                displayName: actor.displayName,
+                avatarUrl: actor.avatarUrl
+              },
+              referenceId: groupId,
+              referenceType: 'group'
+            };
+            break;
+          }
+
           default:
             console.warn(`[WARN] Unrecognized event channel: ${eventChannel}`);
             channel.ack(msg);

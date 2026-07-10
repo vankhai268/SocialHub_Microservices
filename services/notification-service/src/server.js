@@ -24,8 +24,19 @@ const startServer = async () => {
     console.log('✅ Socket.IO server initialized.');
 
     // 3. Setup RabbitMQ Connection and Channel
-    console.log('🔌 Connecting to RabbitMQ...');
-    rabbitConnection = await amqp.connect(config.RABBITMQ_URL);
+    let retries = 5;
+    while (retries) {
+      try {
+        console.log('🔌 Connecting to RabbitMQ...');
+        rabbitConnection = await amqp.connect(config.RABBITMQ_URL);
+        break;
+      } catch (err) {
+        console.error(`❌ Failed to connect to RabbitMQ, retrying in 5 seconds... (${retries} left)`);
+        retries -= 1;
+        if (retries === 0) throw err;
+        await new Promise(res => setTimeout(res, 5000));
+      }
+    }
     const rabbitChannel = await rabbitConnection.createChannel();
     console.log('✅ Connected to RabbitMQ successfully!');
 

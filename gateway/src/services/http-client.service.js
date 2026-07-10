@@ -30,23 +30,39 @@ async function proxyRequest(serviceName, baseUrl, req, res, targetPath) {
     }
   }
 
-  // Forward the request using Axios
-  const response = await axios({
+  const requestConfig = {
     method: req.method,
     url: targetUrl,
     headers: headers,
     params: req.query,
-    data: req,
     responseType: 'stream',
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
-    validateStatus: (status) => {
-      return status < 500;
-    }
-  });
+    validateStatus: () => true
+  };
+
+  // Only forward body stream for methods that traditionally have a body
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+    requestConfig.data = req;
+  }
+
+  // Forward the request using Axios
+  const response = await axios(requestConfig);
+
+  const ignoredHeaders = [
+    'connection',
+    'content-length',
+    'transfer-encoding',
+    'access-control-allow-origin',
+    'access-control-allow-methods',
+    'access-control-allow-headers',
+    'access-control-allow-credentials',
+    'access-control-expose-headers',
+    'access-control-max-age'
+  ];
 
   Object.keys(response.headers).forEach((key) => {
-    if (key.toLowerCase() !== 'transfer-encoding') {
+    if (!ignoredHeaders.includes(key.toLowerCase())) {
       res.setHeader(key, response.headers[key]);
     }
   });
@@ -87,6 +103,7 @@ const friendServiceBreaker = new CircuitBreaker(
 // Create a Circuit Breaker for Notification Service
 const notificationServiceBreaker = new CircuitBreaker(
   (req, res, targetPath) => proxyRequest('notification-service', config.NOTIFICATION_SERVICE_URL, req, res, targetPath),
+  breakerOptions
 );
 // Create a Circuit Breaker for Chat Service
 const chatServiceBreaker = new CircuitBreaker(

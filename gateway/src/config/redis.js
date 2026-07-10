@@ -6,7 +6,7 @@ const redis = new Redis(config.REDIS_URL, {
 });
 
 redis.on('connect', () => {
-  console.log('⚡ Redis connected successfully in API Gateway!');
+  console.log('[INFO] Redis connected successfully in API Gateway!');
 });
 
 redis.on('error', (err) => {

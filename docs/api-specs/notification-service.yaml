@@ -207,11 +207,11 @@ x-async-events:
       message:
         name: FriendRequestSentEvent
         fields:
-          - name: eventId,    type: string (uuid)
-          - name: fromUserId, type: string (uuid)
-          - name: toUserId,   type: string (uuid)
-          - name: requestId,  type: string (uuid)
-          - name: occurredAt, type: string (ISO-8601)
+          - { name: eventId,    type: string (uuid) }
+          - { name: fromUserId, type: string (uuid) }
+          - { name: toUserId,   type: string (uuid) }
+          - { name: requestId,  type: string (uuid) }
+          - { name: occurredAt, type: string (ISO-8601) }
       action: |
         1. Fetch fromUser display name from user-service
         2. Create notification: type=friend_request, userId=toUserId,
@@ -225,10 +225,10 @@ x-async-events:
       message:
         name: FriendRequestAcceptedEvent
         fields:
-          - name: eventId,    type: string (uuid)
-          - name: fromUserId, type: string (uuid), description: Original sender
-          - name: toUserId,   type: string (uuid), description: User who accepted
-          - name: occurredAt, type: string (ISO-8601)
+          - { name: eventId,    type: string (uuid) }
+          - { name: fromUserId, type: string (uuid), description: Original sender }
+          - { name: toUserId,   type: string (uuid), description: User who accepted }
+          - { name: occurredAt, type: string (ISO-8601) }
       action: |
         1. Fetch toUser display name from user-service
         2. Create notification: type=friend_accepted, userId=fromUserId,
@@ -241,11 +241,11 @@ x-async-events:
       message:
         name: PostLikedEvent
         fields:
-          - name: eventId,      type: string (uuid)
-          - name: userId,       type: string (uuid), description: User who liked
-          - name: postId,       type: string (uuid)
-          - name: postAuthorId, type: string (uuid)
-          - name: occurredAt,   type: string (ISO-8601)
+          - { name: eventId,      type: string (uuid) }
+          - { name: userId,       type: string (uuid), description: User who liked }
+          - { name: postId,       type: string (uuid) }
+          - { name: postAuthorId, type: string (uuid) }
+          - { name: occurredAt,   type: string (ISO-8601) }
       action: |
         1. Skip if userId == postAuthorId (don't notify self-likes)
         2. Fetch userId display name from user-service
@@ -260,12 +260,12 @@ x-async-events:
       message:
         name: PostCommentedEvent
         fields:
-          - name: eventId,      type: string (uuid)
-          - name: userId,       type: string (uuid)
-          - name: postId,       type: string (uuid)
-          - name: postAuthorId, type: string (uuid)
-          - name: commentId,    type: string (uuid)
-          - name: occurredAt,   type: string (ISO-8601)
+          - { name: eventId,      type: string (uuid) }
+          - { name: userId,       type: string (uuid) }
+          - { name: postId,       type: string (uuid) }
+          - { name: postAuthorId, type: string (uuid) }
+          - { name: commentId,    type: string (uuid) }
+          - { name: occurredAt,   type: string (ISO-8601) }
       action: |
         1. Skip if userId == postAuthorId
         2. Create notification: type=post_commented, userId=postAuthorId,
@@ -278,11 +278,11 @@ x-async-events:
       message:
         name: PostSharedEvent
         fields:
-          - name: eventId,      type: string (uuid)
-          - name: userId,       type: string (uuid)
-          - name: postId,       type: string (uuid)
-          - name: postAuthorId, type: string (uuid)
-          - name: occurredAt,   type: string (ISO-8601)
+          - { name: eventId,      type: string (uuid) }
+          - { name: userId,       type: string (uuid) }
+          - { name: postId,       type: string (uuid) }
+          - { name: postAuthorId, type: string (uuid) }
+          - { name: occurredAt,   type: string (ISO-8601) }
       action: |
         1. Skip if userId == postAuthorId
         2. Create notification: type=post_shared, userId=postAuthorId
@@ -294,12 +294,12 @@ x-async-events:
       message:
         name: MessageSentEvent
         fields:
-          - name: eventId,        type: string (uuid)
-          - name: senderId,       type: string (uuid)
-          - name: conversationId, type: string
-          - name: recipientId,    type: string (uuid)
-          - name: preview,        type: string
-          - name: occurredAt,     type: string (ISO-8601)
+          - { name: eventId,        type: string (uuid) }
+          - { name: senderId,       type: string (uuid) }
+          - { name: conversationId, type: string }
+          - { name: recipientId,    type: string (uuid) }
+          - { name: preview,        type: string }
+          - { name: occurredAt,     type: string (ISO-8601) }
       action: |
         1. Create notification: type=new_message, userId=recipientId,
            message="{sender.displayName} đã gửi tin nhắn cho bạn",
@@ -312,12 +312,12 @@ x-async-events:
       message:
         name: GroupMemberAddedEvent
         fields:
-          - name: eventId,       type: string (uuid)
-          - name: groupId,       type: string
-          - name: groupName,     type: string
-          - name: addedUserId,   type: string (uuid)
-          - name: addedByUserId, type: string (uuid)
-          - name: occurredAt,    type: string (ISO-8601)
+          - { name: eventId,       type: string (uuid) }
+          - { name: groupId,       type: string }
+          - { name: groupName,     type: string }
+          - { name: addedUserId,   type: string (uuid) }
+          - { name: addedByUserId, type: string (uuid) }
+          - { name: occurredAt,    type: string (ISO-8601) }
       action: |
         1. Create notification: type=group_added, userId=addedUserId,
            message="Bạn đã được thêm vào nhóm '{groupName}'"

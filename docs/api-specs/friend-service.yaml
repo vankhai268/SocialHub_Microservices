@@ -380,11 +380,11 @@ x-async-events:
       message:
         name: FriendRequestSentEvent
         fields:
-          - name: eventId,      type: string (uuid), description: Deduplication ID
-          - name: fromUserId,   type: string (uuid), description: User who sent the request
-          - name: toUserId,     type: string (uuid), description: User who received the request
-          - name: requestId,    type: string (uuid), description: Friend request ID
-          - name: occurredAt,   type: string (ISO-8601 datetime)
+          - { name: eventId,      type: string (uuid), description: Deduplication ID }
+          - { name: fromUserId,   type: string (uuid), description: User who sent the request }
+          - { name: toUserId,     type: string (uuid), description: User who received the request }
+          - { name: requestId,    type: string (uuid), description: Friend request ID }
+          - { name: occurredAt,   type: string (ISO-8601 datetime) }
 
     - channel: friend.request.accepted
       description: Emitted when a user accepts a friend request
@@ -392,10 +392,10 @@ x-async-events:
       message:
         name: FriendRequestAcceptedEvent
         fields:
-          - name: eventId,      type: string (uuid)
-          - name: fromUserId,   type: string (uuid), description: User who originally sent the request
-          - name: toUserId,     type: string (uuid), description: User who accepted the request
-          - name: occurredAt,   type: string (ISO-8601 datetime)
+          - { name: eventId,      type: string (uuid) }
+          - { name: fromUserId,   type: string (uuid), description: User who originally sent the request }
+          - { name: toUserId,     type: string (uuid), description: User who accepted the request }
+          - { name: occurredAt,   type: string (ISO-8601 datetime) }
 
 # =======================================================================
 # Shared Schemas

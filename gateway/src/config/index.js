@@ -11,7 +11,7 @@ export const config = {
   POST_SERVICE_URL: process.env.POST_SERVICE_URL || 'http://post-service:5000',
   FRIEND_SERVICE_URL: process.env.FRIEND_SERVICE_URL || 'http://friend-service:5000',
   NOTIFICATION_SERVICE_URL: process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:5000',
-  CHAT_SERVICE_URL: process.env.CHAT_SERVICE_URL || 'http://chat-service:5000',
+  CHAT_SERVICE_URL: process.env.CHAT_SERVICE_URL || 'http://localhost:5004',
   JWT_SECRET: process.env.JWT_SECRET || 'your-jwt-secret-change-in-production',
   REDIS_URL: process.env.REDIS_URL || 'redis://redis:6379',
 

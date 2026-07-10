@@ -15,7 +15,9 @@ export const startEventBridge = async (rabbitChannel) => {
     'friend.request.accepted',
     'post.liked',
     'post.commented',
-    'post.shared'
+    'post.shared',
+    'message.sent',
+    'group.member.added'
   ];
 
   redisSub.on('connect', () => {

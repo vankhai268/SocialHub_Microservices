@@ -459,11 +459,11 @@ x-async-events:
       message:
         name: PostLikedEvent
         fields:
-          - name: eventId,       type: string (uuid)
-          - name: userId,        type: string (uuid), description: User who liked
-          - name: postId,        type: string (uuid)
-          - name: postAuthorId,  type: string (uuid), description: Post author to notify
-          - name: occurredAt,    type: string (ISO-8601 datetime)
+          - { name: eventId,       type: string (uuid) }
+          - { name: userId,        type: string (uuid), description: User who liked }
+          - { name: postId,        type: string (uuid) }
+          - { name: postAuthorId,  type: string (uuid), description: Post author to notify }
+          - { name: occurredAt,    type: string (ISO-8601 datetime) }
 
     - channel: post.commented
       description: Emitted when a user comments on a post (to notify the post author)
@@ -471,12 +471,12 @@ x-async-events:
       message:
         name: PostCommentedEvent
         fields:
-          - name: eventId,       type: string (uuid)
-          - name: userId,        type: string (uuid), description: User who commented
-          - name: postId,        type: string (uuid)
-          - name: postAuthorId,  type: string (uuid)
-          - name: commentId,     type: string (uuid)
-          - name: occurredAt,    type: string (ISO-8601 datetime)
+          - { name: eventId,       type: string (uuid) }
+          - { name: userId,        type: string (uuid), description: User who commented }
+          - { name: postId,        type: string (uuid) }
+          - { name: postAuthorId,  type: string (uuid) }
+          - { name: commentId,     type: string (uuid) }
+          - { name: occurredAt,    type: string (ISO-8601 datetime) }
 
     - channel: post.shared
       description: Emitted when a user shares a post (to notify the original post author)
@@ -484,11 +484,11 @@ x-async-events:
       message:
         name: PostSharedEvent
         fields:
-          - name: eventId,       type: string (uuid)
-          - name: userId,        type: string (uuid), description: User who shared
-          - name: postId,        type: string (uuid)
-          - name: postAuthorId,  type: string (uuid)
-          - name: occurredAt,    type: string (ISO-8601 datetime)
+          - { name: eventId,       type: string (uuid) }
+          - { name: userId,        type: string (uuid), description: User who shared }
+          - { name: postId,        type: string (uuid) }
+          - { name: postAuthorId,  type: string (uuid) }
+          - { name: occurredAt,    type: string (ISO-8601 datetime) }
 
 # =======================================================================
 # Shared Schemas
