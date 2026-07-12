@@ -65,48 +65,43 @@ gcloud compute networks create socialhub-vpc --subnet-mode=custom
 
 ### 2. Tạo Subnet nội bộ tại vùng `asia-east1`:
 ```bash
-gcloud compute networks subnets create socialhub-subnet-asia \
-    --network=socialhub-vpc \
-    --region=asia-east1 \
-    --range=10.0.0.0/20 \
-    --enable-private-ip-google-access
+gcloud compute networks subnets create socialhub-subnet-asia --network=socialhub-vpc --region=asia-east1 --range=10.0.0.0/20 --enable-private-ip-google-access
 ```
 
 ### 3. Tạo Cloud NAT (Để các Pod private có thể tải thư viện ngoài internet nhưng không bị bên ngoài truy cập vào):
 -   Tạo Cloud Router:
     ```bash
-    gcloud compute routers create socialhub-router \
-        --network=socialhub-vpc \
-        --region=asia-east1
+    gcloud compute routers create socialhub-router --network=socialhub-vpc --region=asia-east1
     ```
 -   Tạo NAT Gateway:
     ```bash
-    gcloud compute routers nats create socialhub-nat \
-        --router=socialhub-router \
-        --region=asia-east1 \
-        --auto-allocate-nat-external-ips \
-        --nat-all-subnet-ip-ranges
+    gcloud compute routers nats create socialhub-nat --router=socialhub-router --region=asia-east1 --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges
     ```
 
+> ⚠️ **Lưu ý sửa lỗi (Troubleshooting - Lỗi 409 Already Exists)**:
+> Nếu trước đó bạn đã lỡ tạo `socialhub-router` mà không chỉ định mạng (khiến nó nằm ở mạng `default`), bạn sẽ gặp lỗi `HTTPError 409`. Để dọn dẹp và đưa router về đúng mạng `socialhub-vpc`, hãy chạy chuỗi lệnh sau trước khi làm tiếp:
+> ```bash
+> # 1. Xóa NAT cũ bị gán sai
+> gcloud compute routers nats delete socialhub-nat --router=socialhub-router --region=asia-east1 --quiet
+> 
+> # 2. Xóa Router cũ bị gán sai ở mạng default
+> gcloud compute routers delete socialhub-router --region=asia-east1 --quiet
+> 
+> # 3. Tiến hành chạy lại 2 lệnh tạo Router và tạo NAT Gateway ở trên.
+> ```
+
 ---
+
 
 ## 💾 Bước 4: Khởi Tạo Các Dịch Vụ Cơ Sở Dữ Liệu Managed
 
 ### 1. Cấp dải IP private cho kết nối Database (VPC Peering):
 ```bash
 # Đăng ký dải IP nội bộ cho dịch vụ GCP
-gcloud compute addresses create socialhub-private-ip-alloc \
-    --global \
-    --purpose=VPC_PEERING \
-    --addresses=10.128.0.0 \
-    --prefix-length=16 \
-    --network=socialhub-vpc
+gcloud compute addresses create socialhub-private-ip-alloc --global --purpose=VPC_PEERING --addresses=10.128.0.0 --prefix-length=16 --network=socialhub-vpc
 
 # Tạo kết nối Peer tới hạ tầng Database Google
-gcloud services vpc-peerings connect \
-    --service=servicenetworking.googleapis.com \
-    --ranges=socialhub-private-ip-alloc \
-    --network=socialhub-vpc
+gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com --ranges=socialhub-private-ip-alloc --network=socialhub-vpc
 ```
 
 ### 2. Tạo Google Cloud SQL for PostgreSQL (Cấu hình High Availability - HA):
