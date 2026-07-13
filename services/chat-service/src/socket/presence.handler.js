@@ -17,7 +17,7 @@ export const handleUserOnline = async (io, socket) => {
   conversations.forEach(conv => {
     const roomId = `conv:${conv._id.toString()}`;
     socket.join(roomId);
-    
+
     // Broadcast user:online to the room (excluding sender)
     socket.to(roomId).emit('user:online', { userId });
   });
@@ -42,7 +42,7 @@ export const handleUserOffline = async (io, socket) => {
     const roomId = `conv:${conv._id.toString()}`;
     socket.to(roomId).emit('user:offline', { userId });
   });
-  
+
   console.log(`🔴 User ${userId} (${socket.displayName}) went offline`);
 };
 
