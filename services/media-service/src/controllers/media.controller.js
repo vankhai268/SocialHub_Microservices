@@ -32,6 +32,24 @@ export const mediaController = {
     }
   },
 
+  streamMedia: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { stream, mimeType, size } = await mediaService.getFileStream(id);
+      
+      res.setHeader('Content-Type', mimeType);
+      if (size) {
+        res.setHeader('Content-Length', size);
+      }
+      // Cache-Control header to cache images for 1 year in browser
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      
+      stream.pipe(res);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   deleteMedia: async (req, res, next) => {
     try {
       const userId = req.headers['x-user-id'];

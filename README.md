@@ -23,14 +23,14 @@ Các dịch vụ nền được kích hoạt qua Docker Compose và mở cổng 
 
 ### 2. Các Microservices Ứng Dụng (Chạy local trên Host)
 
-| Tên Dịch Vụ | Cổng trên Host | URL Downstream | Trách nhiệm chính |
-|---|---|---|---|
-| **API Gateway** | `8080` | `http://localhost:8080` | Cổng vào duy nhất, Routing, Auth JWT, Rate Limit, WS Proxy, Swagger API Docs |
-| **user-service** | `5001` | `http://localhost:5001` | Quản lý Tài khoản, Đăng nhập, Profile, Search User, Batch API |
-| **friend-service** | `5002` | `http://localhost:5002` | Quản lý kết bạn, Lời mời kết bạn, mutual friends, suggestions |
-| **post-service** | `5003` | `http://localhost:5003` | Quản lý bài viết, Newsfeed, Likes, Bình luận, Chia sẻ (Prisma ORM) |
-| **chat-service** | `5004` | `http://localhost:5004` | Quản lý tin nhắn 1-1, nhóm chat, lịch sử chat (MongoDB), online presence |
-| **media-service** | `5005` | `http://localhost:5005` | Upload file ảnh/video lên MinIO, tạo presigned URL có hạn |
+| Tên Dịch Vụ              | Cổng trên Host | URL Downstream | Trách nhiệm chính |
+|--------------------------|---|---|---|
+| **API Gateway**          | `8080` | `http://localhost:8080` | Cổng vào duy nhất, Routing, Auth JWT, Rate Limit, WS Proxy, Swagger API Docs |
+| **user-service**         | `5001` | `http://localhost:5001` | Quản lý Tài khoản, Đăng nhập, Profile, Search User, Batch API |
+| **friend-service**       | `5002` | `http://localhost:5002` | Quản lý kết bạn, Lời mời kết bạn, mutual friends, suggestions |
+| **post-service**         | `5003` | `http://localhost:5003` | Quản lý bài viết, Newsfeed, Likes, Bình luận, Chia sẻ (Prisma ORM) |
+| **chat-service**         | `5004` | `http://localhost:5004` | Quản lý tin nhắn 1-1, nhóm chat, lịch sử chat (MongoDB), online presence |
+| **media-service**        | `5005` | `http://localhost:5005` | Upload file ảnh/video lên MinIO, tạo presigned URL có hạn |
 | **notification-service** | `5006` | `http://localhost:5006` | Bridge sự kiện Redis Pub/Sub sang RabbitMQ, đẩy Realtime via Sockets |
 
 ---
@@ -105,10 +105,10 @@ cd services/media-service && npm install && npm run dev
 # 6. Khởi chạy notification-service
 cd services/notification-service && npm install && npm run dev
 
-# 7. Khởi chạy API Gateway
+# 8. Khởi chạy API Gateway
 cd gateway && npm install && npm run dev
 
-# 8. Khởi chạy Giao Diện Frontend
+# 9. Khởi chạy Giao Diện Frontend
 cd frontend && npm install && npm run dev
 ```
 
@@ -270,7 +270,7 @@ Mọi yêu cầu từ Client phải đi qua Gateway tại địa chỉ `http://l
 
 ### 4. Danh Mục API Tệp Đa Phương Tiện (`media-service`)
 
-*Tất cả API dưới đây đều yêu cầu Header: `Authorization: Bearer <token>`*
+*Tất cả API dưới đây đều yêu cầu Header: `Authorization: Bearer <token>` (ngoại trừ endpoint Tải/Hiển thị file nhị phân trực tiếp)*
 
 #### 🔹 Tải lên tệp ảnh/video
 `POST /api/media/upload`
@@ -281,9 +281,13 @@ Mọi yêu cầu từ Client phải đi qua Gateway tại địa chỉ `http://l
 #### 🔹 Lấy thông tin metadata của file
 `GET /api/media/:mediaId`
 
-#### 🔹 Lấy đường dẫn Presigned URL dùng để tải/hiển thị file
+#### 🔹 Lấy đường dẫn URL proxy dùng để tải/hiển thị file
 `GET /api/media/:mediaId/url`
-- **Response**: Trả về link S3 MinIO trực tiếp có giới hạn thời gian (TTL 15 phút).
+- **Response**: Trả về đường dẫn proxy đi qua Gateway `/media/file/:mediaId` (nhằm giải quyết các lỗi mixed-content HTTPS và ngrok khi chạy trên Vercel).
+
+#### 🔹 Tải/Hiển thị file nhị phân trực tiếp (Public - Không cần Token)
+`GET /api/media/file/:mediaId`
+- **Response**: Trả về luồng file nhị phân trực tiếp với đúng `Content-Type` và `Cache-Control` được thiết lập dài hạn trong trình duyệt.
 
 #### 🔹 Xóa file
 `DELETE /api/media/:mediaId`

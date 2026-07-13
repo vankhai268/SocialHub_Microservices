@@ -45,11 +45,24 @@ export const mediaService = {
     return media;
   },
 
+  getFileStream: async (id) => {
+    const media = await Media.findById(id);
+    if (!media) throw new NotFoundError('Media not found');
+
+    const stream = await minioService.getFileStream(media.objectKey);
+    return {
+      stream,
+      mimeType: media.mimeType,
+      size: media.size
+    };
+  },
+
   getPresignedUrl: async (id) => {
     const media = await Media.findById(id);
     if (!media) throw new NotFoundError('Media not found');
 
-    const url = await minioService.generatePresignedUrl(media.objectKey, config.PRESIGNED_URL_TTL);
+    // Trả về relative URL để đi qua proxy API Gateway
+    const url = `/media/file/${media._id}`;
     const expiresAt = new Date(Date.now() + config.PRESIGNED_URL_TTL * 1000);
 
     return {
@@ -84,7 +97,7 @@ export const mediaService = {
       try {
         const media = await Media.findById(id);
         if (media) {
-          const url = await minioService.generatePresignedUrl(media.objectKey, config.PRESIGNED_URL_TTL);
+          const url = `/media/file/${media._id}`;
           urls.push({ mediaId: id, url, expiresAt: new Date(Date.now() + config.PRESIGNED_URL_TTL * 1000) });
         }
       } catch (e) {

@@ -23,6 +23,7 @@ const mapToMediaService = (req, res) => {
 
 router.post('/media/upload', protectRoute, mapToMediaService);
 router.post('/media/batch-urls', protectRoute, mapToMediaService);
+router.get('/media/file/:id', mapToMediaService); // Public streaming route
 router.get('/media/:id', protectRoute, mapToMediaService);
 router.get('/media/:id/url', protectRoute, mapToMediaService);
 router.delete('/media/:id', protectRoute, mapToMediaService);

@@ -37,10 +37,11 @@ Trong kiến trúc hệ thống, mọi request từ client đều đi qua **API 
 |--------|-----------------------|--------------------------------------|----------------|
 | GET    | `/health`             | Kiểm tra trạng thái service và MinIO | Không cần      |
 | POST   | `/media/upload`       | Upload file ảnh (multipart/form-data)| `x-user-id`    |
-| GET    | `/media/:id`          | Lấy metadata của file                | Không cần      |
-| GET    | `/media/:id/url`      | Lấy Presigned URL để tải ảnh         | Không cần      |
-| DELETE | `/media/:id`          | Xóa file (chỉ chủ sở hữu)           | `x-user-id`    |
-| POST   | `/media/batch-urls`   | Lấy Presigned URL cho nhiều file     | Không cần      |
+| GET    | `/media/file/:id`     | Tải/Hiển thị file nhị phân trực tiếp | Không cần      |
+| GET    | `/media/:id`          | Lấy metadata của file                | `x-user-id`    |
+| GET    | `/media/:id/url`      | Lấy relative proxy URL để tải ảnh    | `x-user-id`    |
+| DELETE | `/media/:id`          | Xóa file (chỉ chủ sở hữu)            | `x-user-id`    |
+| POST   | `/media/batch-urls`   | Lấy relative proxy URLs cho nhiều file| `x-user-id`   |
 
 > Full API specification: [`docs/api-specs/media-service.yaml`](../../docs/api-specs/media-service.yaml)
 
@@ -59,10 +60,13 @@ POST /media/upload
 GET /media/:id/url
   │
   ├─ Tìm Metadata trong MongoDB theo id
-  ├─ Gọi MinIO tạo Presigned URL (TTL = 900 giây)
-  └─ Trả về { mediaId, url, expiresAt, ttlSeconds }
+  └─ Trả về { mediaId, url: "/media/file/:id", expiresAt, ttlSeconds }
 
-Client → MinIO (tải ảnh trực tiếp bằng Presigned URL, không qua service)
+GET /media/file/:id (Public Proxy Stream)
+  │
+  ├─ Tìm Metadata trong MongoDB theo id
+  ├─ Gọi MinIO lấy luồng đọc file (getObject stream)
+  └─ Stream trực tiếp về Client kèm Content-Type & Cache-Control
 ```
 
 ---
