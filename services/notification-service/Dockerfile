@@ -1,58 +1,36 @@
-# Bước 1: Sử dụng node image bản nhẹ (alpine) làm base image
-FROM node:18-alpine
+# 1. Base image Node.js 20 Slim (Debian-based to avoid Alpine DNS bugs)
+FROM node:20-slim
 
-# Bước 2: Thiết lập thư mục làm việc bên trong container
-WORKDIR /usr/src/app
+# 2. Install tini for proper process management & signal forwarding
+RUN apt-get update && apt-get install -y tini && rm -rf /var/lib/apt/lists/*
 
-# Bước 3: Sao chép file package.json và package-lock.json để cài đặt thư viện
-COPY package*.json ./
+# 3. Setup working directory
+WORKDIR /app
 
-# Bước 4: Cài đặt các thư viện phụ thuộc (chỉ cài production dependencies)
-RUN npm install --omit=dev
+# 4. Set directory ownership to non-root 'node' user for security
+RUN chown -R node:node /app
 
-# Bước 5: Sao chép toàn bộ mã nguồn vào container (trừ các file trong .dockerignore)
-COPY . .
+USER node
 
-# Bước 6: Thiết lập cổng mặc định mà service sẽ chạy trong container
+# 5. Copy package files first to leverage Docker Cache layer
+COPY --chown=node:node package*.json ./
+
+# 6. Install production dependencies only using npm ci
+RUN npm ci --omit=dev
+
+# 7. Copy source code
+COPY --chown=node:node src ./src
+
+# 8. Set Node environment variables and limit V8 heap size to save RAM
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=128"
 ENV PORT=5000
+
+# 9. Expose internal port
 EXPOSE 5000
 
-# Bước 7: Lệnh khởi chạy ứng dụng khi container bắt đầu chạy
-CMD ["node", "src/index.js"]
+# 10. Use tini as entrypoint
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
-
-# # 1. Sử dụng Alpine base image để giữ kích thước container siêu nhỏ
-# FROM node:18-alpine
-
-# # 2. Cài đặt 'tini' để quản lý vòng đời process, giúp giải phóng RAM ngay khi stop
-# RUN apk add --no-cache tini
-
-# # 3. Thiết lập thư mục làm việc
-# WORKDIR /usr/src/app
-
-# # 4. Chuyển quyền sở hữu thư mục cho user 'node' (non-root) để tăng tính bảo mật
-# RUN chown -R node:node /usr/src/app
-
-# USER node
-
-# # 5. Chỉ copy các file package trước để tận dụng Docker Cache layer
-# COPY --chown=node:node package*.json ./
-
-# # 6. Dùng 'npm ci' và '--omit=dev' để cài đặt nhanh, chuẩn xác và không tải thư viện dev
-# RUN npm ci --omit=dev
-
-# # 7. Copy toàn bộ mã nguồn vào container
-# COPY --chown=node:node . .
-
-# # 8. Cấu hình biến môi trường Production và ép V8 Engine giới hạn RAM (128MB)
-# ENV NODE_ENV=production
-# ENV NODE_OPTIONS="--max-old-space-size=128"
-# ENV PORT=5000
-
-# EXPOSE 5000
-
-# # 9. Sử dụng tini làm Entrypoint
-# ENTRYPOINT ["/sbin/tini", "--"]
-
-# # 10. Chạy trực tiếp bằng lệnh node thay vì npm start
-# CMD ["node", "src/index.js"]
+# 11. Run node directly
+CMD ["node", "src/server.js"]
