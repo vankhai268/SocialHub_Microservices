@@ -42,6 +42,16 @@ app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("❌ Global error in User Service:", err);
+  res.status(err.statusCode || 500).json({
+    success: false,
+    error: err.name || "InternalServerError",
+    message: err.message || "An unexpected error occurred in User Service"
+  });
+});
+
 app.listen(PORT, () => {
     console.log("Server is running on port ", PORT);
 })

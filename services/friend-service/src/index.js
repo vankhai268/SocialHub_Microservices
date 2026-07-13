@@ -41,6 +41,16 @@ app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok", service: "friend-service" });
 });
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("❌ Global error in Friend Service:", err);
+  res.status(err.statusCode || 500).json({
+    success: false,
+    error: err.name || "InternalServerError",
+    message: err.message || "An unexpected error occurred in Friend Service"
+  });
+});
+
 app.listen(PORT, () => {
     console.log("Server is running on port: ", PORT);
 });
