@@ -61,6 +61,13 @@ export const minioService = {
   },
 
   /**
+   * Lấy Stream đọc file từ MinIO
+   */
+  getFileStream: async (objectKey) => {
+    return minioClient.getObject(config.MINIO_BUCKET_NAME, objectKey);
+  },
+
+  /**
    * Xóa file khỏi MinIO
    */
   deleteFile: async (objectKey) => {

@@ -17,7 +17,12 @@ const PostCard = ({ post, currentUserId }) => {
                     const mediaId = post.media_ids[0]; // Lấy ảnh đầu tiên
                     const res = await api.get(`/media/${mediaId}/url`);
                     if (res.data && res.data.url) {
-                        setImageUrl(res.data.url);
+                        const url = res.data.url;
+                        if (url.startsWith("http")) {
+                            setImageUrl(url);
+                        } else {
+                            setImageUrl(`${api.defaults.baseURL}${url}`);
+                        }
                     }
                 } catch (error) {
                     console.error("❌ Lỗi lấy link ảnh:", error.message);
