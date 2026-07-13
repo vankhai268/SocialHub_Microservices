@@ -45,6 +45,11 @@ const Feed = () => {
         setPosts((prevPosts) => [postWithAuthor, ...prevPosts]);
     };
 
+    // 3. Hàm callback khi chia sẻ bài đăng thành công (Chèn bài chia sẻ lên đầu trang)
+    const handlePostShared = (newSharedPost) => {
+        setPosts((prevPosts) => [newSharedPost, ...prevPosts]);
+    };
+
     return (
         <div className="space-y-6">
             {/* Tiêu đề trang */}
@@ -64,7 +69,12 @@ const Feed = () => {
             ) : posts.length > 0 ? (
                 <div className="space-y-6">
                     {posts.map((post) => (
-                        <PostCard key={post.id} post={post} currentUserId={user?.id} />
+                        <PostCard 
+                            key={post.id} 
+                            post={post} 
+                            currentUserId={user?.id} 
+                            onPostShared={handlePostShared} 
+                        />
                     ))}
                 </div>
             ) : (
