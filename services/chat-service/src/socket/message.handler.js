@@ -131,4 +131,12 @@ export default (io, socket) => {
       socket.emit('error', { message: 'Failed to mark message as read' });
     }
   });
+
+  // 3. Join conversation room manually
+  socket.on('conversation:join', ({ conversationId }) => {
+    if (!conversationId) return;
+    const roomId = `conv:${conversationId}`;
+    socket.join(roomId);
+    console.log(`🔌 Socket ${socket.id} (User: ${socket.userId}) joined conversation room: ${roomId}`);
+  });
 };

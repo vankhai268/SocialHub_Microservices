@@ -1,0 +1,133 @@
+import { createContext, useContext, useState, useEffect } from "react";
+import { io } from "socket.io-client";
+import { useAuth } from "./AuthContext";
+import api from "../services/api";
+
+const SocketContext = createContext(null);
+
+export const SocketProvider = ({ children }) => {
+    const { isAuthenticated } = useAuth();
+    const [notificationSocket, setNotificationSocket] = useState(null);
+    const [chatSocket, setChatSocket] = useState(null);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [toast, setToast] = useState(null);
+    const [onlineUsers, setOnlineUsers] = useState({}); // Lưu danh sách user đang online: { userId: true }
+
+    // 1. Tải số lượng tin chưa đọc ban đầu bằng REST API
+    const fetchUnreadCount = async () => {
+        try {
+            const res = await api.get("/notifications/unread-count");
+            if (res.data && res.data.success) {
+                setUnreadCount(res.data.count || 0);
+            }
+        } catch (err) {
+            console.error("❌ Lỗi lấy số thông báo chưa đọc:", err.message);
+        }
+    };
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            // Ngắt kết nối các socket nếu logout
+            if (notificationSocket) {
+                notificationSocket.disconnect();
+                setNotificationSocket(null);
+            }
+            if (chatSocket) {
+                chatSocket.disconnect();
+                setChatSocket(null);
+            }
+            setUnreadCount(0);
+            setToast(null);
+            setOnlineUsers({});
+            return;
+        }
+
+        // Tải số lượng chưa đọc
+        fetchUnreadCount();
+
+        const token = localStorage.getItem("accessToken");
+
+        // 2. Khởi tạo Notification Socket (qua đường dẫn /notification/socket.io/)
+        const notifSock = io("http://localhost:8080", {
+            auth: { token },
+            path: "/notification/socket.io/"
+        });
+
+        notifSock.on("connect", () => {
+            console.log("⚡ Kết nối thành công tới Notification Socket!");
+        });
+
+        notifSock.on("notification:count", (data) => {
+            setUnreadCount(data.unreadCount);
+        });
+
+        notifSock.on("notification:received", (notification) => {
+            console.log("📡 Nhận thông báo realtime:", notification);
+            setToast({
+                id: notification.id,
+                message: notification.message,
+                avatarUrl: notification.fromUser?.avatarUrl,
+                type: notification.type
+            });
+
+            const timer = setTimeout(() => {
+                setToast(null);
+            }, 4000);
+
+            return () => clearTimeout(timer);
+        });
+
+        setNotificationSocket(notifSock);
+
+        // 3. Khởi tạo Chat Socket (qua đường dẫn /chat/socket.io/)
+        const chSock = io("http://localhost:8080", {
+            auth: { token },
+            path: "/chat/socket.io/"
+        });
+
+        chSock.on("connect", () => {
+            console.log("⚡ Kết nối thành công tới Chat Socket!");
+        });
+
+        // Lắng nghe trạng thái trực tuyến của người dùng khác
+        chSock.on("user:online", ({ userId }) => {
+            console.log(`🟢 User ${userId} online`);
+            setOnlineUsers(prev => ({ ...prev, [userId]: true }));
+        });
+
+        chSock.on("user:offline", ({ userId }) => {
+            console.log(`🔴 User ${userId} offline`);
+            setOnlineUsers(prev => {
+                const updated = { ...prev };
+                delete updated[userId];
+                return updated;
+            });
+        });
+
+        setChatSocket(chSock);
+
+        // Cleanup dọn dẹp các kết nối
+        return () => {
+            notifSock.disconnect();
+            chSock.disconnect();
+        };
+
+    }, [isAuthenticated]);
+
+    return (
+        <SocketContext.Provider value={{ 
+            notificationSocket, 
+            chatSocket, 
+            unreadCount, 
+            setUnreadCount, 
+            toast, 
+            setToast,
+            onlineUsers,
+            setOnlineUsers
+        }}>
+            {children}
+        </SocketContext.Provider>
+    );
+};
+
+export const useSocket = () => useContext(SocketContext);

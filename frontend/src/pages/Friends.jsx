@@ -82,9 +82,9 @@ const Friends = () => {
         setIsSearching(true);
         try {
             // Gọi API search của user-service
-            const res = await api.get(`/users/search?query=${searchQuery}`);
+            const res = await api.get(`/users/search?q=${searchQuery}`);
             if (res.data && res.data.success) {
-                const users = res.data.users.filter(u => u.id !== currentUser.id); // Loại trừ chính mình
+                const users = res.data.data.filter(u => u.id !== currentUser.id); // Loại trừ chính mình
                 setSearchResults(users);
 
                 // Check trạng thái kết bạn cho từng người tìm thấy
