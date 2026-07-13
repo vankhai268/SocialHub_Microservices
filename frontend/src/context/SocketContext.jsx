@@ -68,6 +68,12 @@ export const SocketProvider = ({ children }) => {
 
         notifSock.on("notification:new", (notification) => {
             console.log("📡 Nhận thông báo realtime:", notification);
+            // Increment unread count instantly
+            setUnreadCount(prev => prev + 1);
+            
+            // Dispatch custom event to notify open Notifications page
+            window.dispatchEvent(new CustomEvent("notification-received", { detail: notification }));
+
             setToast({
                 id: notification.id,
                 message: notification.message,

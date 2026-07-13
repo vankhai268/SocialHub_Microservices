@@ -30,6 +30,23 @@ const Notifications = () => {
         fetchNotifications();
     }, []);
 
+    // Lắng nghe sự kiện thông báo thời gian thực để cập nhật UI ngay lập tức
+    useEffect(() => {
+        const handleNewNotification = (e) => {
+            const newNotif = e.detail;
+            setNotifications(prev => {
+                // Tránh trùng lặp nếu trùng id
+                if (prev.some(n => n.id === newNotif.id)) return prev;
+                return [newNotif, ...prev];
+            });
+        };
+
+        window.addEventListener("notification-received", handleNewNotification);
+        return () => {
+            window.removeEventListener("notification-received", handleNewNotification);
+        };
+    }, []);
+
     // 2. Đánh dấu một thông báo là đã đọc
     const handleMarkAsRead = async (notification) => {
         if (notification.isRead) {
