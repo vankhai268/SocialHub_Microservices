@@ -3,7 +3,7 @@ import Message from '../models/message.model.js';
 import GroupChat from '../models/group.model.js';
 import { fetchUsersBatch } from '../utils/api.js';
 import { redisClient } from '../config/redis.js';
-import { BadRequestError, NotFoundError } from '../utils/error.js';
+import { BadRequestError, NotFoundError, ForbiddenError } from '../utils/error.js';
 
 /**
  * List conversations of a user (paginated)
@@ -130,4 +130,56 @@ export const createConversation = async (userId, participantId) => {
   convJson.unreadCount = 0;
 
   return { conversation: convJson, statusCode };
+};
+
+/**
+ * Get conversation details by ID
+ * @param {string} userId - Requesting user ID
+ * @param {string} conversationId 
+ * @returns {Promise<Object>}
+ */
+export const getConversationById = async (userId, conversationId) => {
+  const conv = await Conversation.findById(conversationId).populate('groupRef');
+  if (!conv) {
+    throw new NotFoundError('Conversation not found');
+  }
+
+  // Verify the user is a participant
+  const isParticipant = conv.participants.some(p => p.userId === userId);
+  if (!isParticipant) {
+    throw new ForbiddenError('You are not a participant in this conversation');
+  }
+
+  // Fetch participant info
+  const participantIds = conv.participants.map(p => p.userId);
+  const users = await fetchUsersBatch(participantIds);
+  const userMap = new Map(users.map(u => [u.id, u]));
+
+  const resolvedParticipants = await Promise.all(conv.participants.map(async (p) => {
+    const u = userMap.get(p.userId) || { displayName: 'User', avatarUrl: null };
+    const isOnline = !!(await redisClient.get(`online:${p.userId}`));
+    return {
+      userId: p.userId,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+      isOnline
+    };
+  }));
+
+  const unreadCount = await Message.countDocuments({
+    conversationId: conv._id,
+    senderId: { $ne: userId },
+    'readBy.userId': { $ne: userId }
+  });
+
+  const convJson = conv.toJSON();
+  convJson.participants = resolvedParticipants;
+  convJson.unreadCount = unreadCount;
+
+  if (conv.type === 'group' && conv.groupRef) {
+    convJson.name = conv.groupRef.name;
+    convJson.avatarUrl = conv.groupRef.avatarUrl;
+  }
+
+  return convJson;
 };

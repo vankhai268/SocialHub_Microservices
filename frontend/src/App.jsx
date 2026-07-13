@@ -10,6 +10,7 @@ import Feed from "./pages/Feed";
 import Profile from "./pages/Profile";
 import Friends from "./pages/Friends";
 import Notifications from "./pages/Notifications";
+import Messages from "./pages/Messages";
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
               <Route path="/" element={<Feed />} />
               <Route path="/friends" element={<Friends />} />
               <Route path="/notifications" element={<Notifications />} />
+              <Route path="/messages" element={<Messages />} />
               <Route path="/profile/:id" element={<Profile />} />
             </Route>
           </Route>

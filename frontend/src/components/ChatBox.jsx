@@ -88,6 +88,19 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
         userId: ""
     };
 
+    const isGroup = conversation.type === "group";
+    const chatTitle = isGroup
+        ? conversation.groupRef?.name || "Cuộc trò chuyện nhóm"
+        : otherParticipant.displayName;
+    
+    const chatAvatar = isGroup
+        ? conversation.groupRef?.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${conversationId}`
+        : otherParticipant.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix";
+        
+    const chatSubtitle = isGroup
+        ? `${conversation.participants?.length || 0} thành viên`
+        : (conversation.isOnline || otherParticipant.isOnline ? "Trực tuyến" : "Ngoại tuyến");
+
     // 1a. Tải lịch sử tin nhắn
     useEffect(() => {
         const fetchMessages = async () => {
@@ -246,29 +259,29 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
     };
 
     return (
-        <div className="w-80 bg-slate-900 border border-white/10 rounded-t-2xl shadow-2xl flex flex-col h-[400px]">
+        <div className="w-80 bg-white border border-slate-200 rounded-t-2xl shadow-xl flex flex-col h-[400px]">
             {/* Header hộp thoại */}
-            <div className="flex items-center justify-between p-3 border-b border-white/10 bg-slate-950/60 rounded-t-2xl">
+            <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-50 rounded-t-2xl">
                 <div className="flex items-center space-x-2.5">
                     <img
-                        src={otherParticipant.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                        src={chatAvatar}
                         className="w-8 h-8 rounded-full object-cover"
                         alt="Avatar"
                     />
                     <div className="truncate max-w-[150px]">
-                        <h4 className="font-semibold text-white text-xs truncate">{otherParticipant.displayName}</h4>
-                        <p className="text-[10px] text-slate-400">
-                            {conversation.isOnline || otherParticipant.isOnline ? "Trực tuyến" : "Ngoại tuyến"}
+                        <h4 className="font-semibold text-slate-800 text-xs truncate">{chatTitle}</h4>
+                        <p className="text-[10px] text-slate-500">
+                            {chatSubtitle}
                         </p>
                     </div>
                 </div>
-                <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition cursor-pointer">
+                <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full text-slate-500 hover:text-slate-800 transition cursor-pointer">
                     <X className="w-4 h-4" />
                 </button>
             </div>
 
             {/* Vùng tin nhắn */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 bg-slate-950/20">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 bg-slate-50/50">
                 {isLoading ? (
                     <div className="flex justify-center items-center h-full">
                         <Loader className="w-6 h-6 text-violet-500 animate-spin" />
@@ -277,15 +290,25 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                     messages.map((msg, index) => {
                         const isMe = msg.senderId === currentUserId;
                         const msgTime = new Date(msg.createdAt || msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const sender = conversation.participants?.find(p => p.userId === msg.senderId) || {
+                            displayName: "Thành viên",
+                            avatarUrl: null
+                        };
                         
                         return (
                             <div key={msg.id || msg._id || index} className={`flex flex-col ${isMe ? "items-end" : "items-start"} space-y-1`}>
+                                {/* Tên người gửi nếu là group và không phải mình */}
+                                {!isMe && isGroup && (
+                                    <span className="text-[9px] text-slate-500 font-semibold ml-8.5 select-none">
+                                        {sender.displayName}
+                                    </span>
+                                )}
                                 <div className={`flex items-end space-x-2 ${isMe ? "justify-end" : "justify-start"} max-w-[85%]`}>
                                     {/* Avatar người gửi đối phương */}
                                     {!isMe && (
                                         <img
-                                            src={msg.senderAvatar || otherParticipant.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
-                                            className="w-6.5 h-6.5 rounded-full object-cover border border-white/10 flex-shrink-0"
+                                            src={sender.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${msg.senderId}`}
+                                            className="w-6.5 h-6.5 rounded-full object-cover border border-slate-200 flex-shrink-0"
                                             alt="Sender Avatar"
                                         />
                                     )}
@@ -293,13 +316,13 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                                     <div className={`px-3 py-1.5 rounded-2xl text-xs leading-relaxed break-words ${
                                         isMe
                                             ? "bg-violet-600 text-white rounded-br-none"
-                                            : "bg-slate-800 text-slate-200 rounded-bl-none border border-white/5"
+                                            : "bg-slate-100 text-slate-800 rounded-bl-none border border-slate-200"
                                     }`}>
                                         {msg.type === "image" && msg.mediaId ? (
                                             <div className="space-y-1.5">
                                                 <ChatImage mediaId={msg.mediaId} />
                                                 {msg.content && msg.content !== "Sent an image" && (
-                                                    <p className="mt-1 text-slate-200">{msg.content}</p>
+                                                    <p className="mt-1 text-slate-800">{msg.content}</p>
                                                 )}
                                             </div>
                                         ) : (
@@ -308,23 +331,23 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                                     </div>
                                 </div>
                                 {/* Thời gian gửi tin nhắn */}
-                                <span className={`text-[8px] text-slate-500 select-none ${isMe ? "mr-1" : "ml-8.5"}`}>
+                                <span className={`text-[8px] text-slate-400 select-none ${isMe ? "mr-1" : "ml-8.5"}`}>
                                     {msgTime}
                                 </span>
                             </div>
                         );
                     })
                 ) : (
-                    <div className="text-center text-slate-500 text-[10px] py-12">Chưa có tin nhắn nào. Gửi tin nhắn đầu tiên!</div>
+                    <div className="text-center text-slate-400 text-[10px] py-12">Chưa có tin nhắn nào. Gửi tin nhắn đầu tiên!</div>
                 )}
                 
                 {/* Chỉ chỉ số đang gõ */}
                 {isOtherUserTyping && (
-                    <div className="flex items-center space-x-2 text-slate-400 text-[10px] italic">
+                    <div className="flex items-center space-x-2 text-slate-500 text-[10px] italic">
                         <div className="flex space-x-1">
-                            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></span>
-                            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                            <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce"></span>
+                            <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                            <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce [animation-delay:0.4s]"></span>
                         </div>
                         <span>Đang nhập...</span>
                     </div>
@@ -333,10 +356,10 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
             </div>
 
             {/* Input gõ tin nhắn */}
-            <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10 bg-slate-950/40 space-y-2">
+            <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 bg-slate-50 space-y-2">
                 {/* Phần hiển thị ảnh xem trước (Preview) */}
                 {imagePreview && (
-                    <div className="relative rounded-xl overflow-hidden border border-white/10 max-h-20 max-w-[120px] flex items-center bg-slate-950">
+                    <div className="relative rounded-xl overflow-hidden border border-slate-200 max-h-20 max-w-[120px] flex items-center bg-white">
                         <img src={imagePreview} alt="Preview" className="w-full h-full object-contain max-h-20" />
                         <button
                             type="button"
@@ -361,7 +384,7 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isSubmitting}
-                        className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/50 text-slate-400 hover:text-violet-400 rounded-xl transition cursor-pointer disabled:opacity-50"
+                        className="p-2 bg-white border border-slate-200 hover:bg-slate-100 hover:border-violet-600 text-slate-500 hover:text-violet-600 rounded-xl transition cursor-pointer disabled:opacity-50"
                         title="Đính kèm ảnh"
                     >
                         <Image className="w-4 h-4" />
@@ -373,12 +396,12 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                         onChange={handleInputChange}
                         placeholder={isSubmitting ? "Đang gửi..." : "Aa..."}
                         disabled={isSubmitting}
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition disabled:opacity-50"
+                        className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-600 focus:ring-1 focus:ring-violet-600 transition disabled:opacity-50"
                     />
                     <button
                         type="submit"
                         disabled={isSubmitting || (!inputText.trim() && !imageFile)}
-                        className="p-2 bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 disabled:opacity-50 text-white rounded-xl transition cursor-pointer"
+                        className="p-2 bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 disabled:opacity-50 text-white rounded-xl transition cursor-pointer"
                     >
                         {isSubmitting ? (
                             <Loader className="w-4 h-4 animate-spin" />

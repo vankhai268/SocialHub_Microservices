@@ -55,12 +55,17 @@ const Feed = () => {
         setPosts((prevPosts) => prevPosts.filter(p => p.id !== deletedPostId));
     };
 
+    // 5. Hàm callback khi cập nhật bài viết thành công
+    const handlePostUpdated = (updatedPost) => {
+        setPosts((prevPosts) => prevPosts.map(p => p.id === updatedPost.id ? updatedPost : p));
+    };
+
     return (
         <div className="space-y-6">
             {/* Tiêu đề trang */}
             <div className="mb-6">
-                <h1 className="text-3xl font-extrabold text-white tracking-tight bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">Bảng Tin</h1>
-                <p className="text-slate-400 text-sm mt-1">Cập nhật những hoạt động mới nhất từ bạn bè của bạn.</p>
+                <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-violet-600 to-pink-600 bg-clip-text text-transparent">Bảng Tin</h1>
+                <p className="text-slate-600 text-sm mt-1">Cập nhật những hoạt động mới nhất từ bạn bè của bạn.</p>
             </div>
 
             {/* Hộp đăng bài */}
@@ -80,13 +85,14 @@ const Feed = () => {
                             currentUserId={user?.id} 
                             onPostShared={handlePostShared} 
                             onPostDeleted={handlePostDeleted} 
+                            onPostUpdated={handlePostUpdated}
                         />
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-16 bg-white/5 border border-white/10 rounded-2xl p-6">
-                    <MessageCircle className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400 text-lg">Chưa có bài viết nào ở đây.</p>
+                <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                    <MessageCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                    <p className="text-slate-700 text-lg">Chưa có bài viết nào ở đây.</p>
                     <p className="text-slate-500 text-sm mt-1">Hãy là người đầu tiên đăng bài viết hoặc kết bạn mới nhé!</p>
                 </div>
             )}

@@ -4,7 +4,7 @@ import api from "../services/api";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
 import ChatBox from "./ChatBox";
-import { Users, Loader } from "lucide-react";
+import { Users, Loader, MessageSquarePlus, X } from "lucide-react";
 
 const ChatWidget = () => {
     const { user: currentUser } = useAuth();
@@ -14,6 +14,11 @@ const ChatWidget = () => {
 
     // Quản lý các ô chat đang được mở nổi dưới đáy màn hình (Mở tối đa 3 ô thoại cùng lúc)
     const [openChats, setOpenChats] = useState([]);
+
+    // Trạng thái cho việc Tạo nhóm chat
+    const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+    const [groupName, setGroupName] = useState("");
+    const [selectedMembers, setSelectedMembers] = useState([]);
 
     // 1. Tải danh sách bạn bè và lắng nghe sự kiện đồng bộ từ các trang khác
     useEffect(() => {
@@ -112,15 +117,66 @@ const ChatWidget = () => {
         };
     }, [chatSocket, openChats]);
 
+    const handleToggleMember = (friendId) => {
+        setSelectedMembers(prev =>
+            prev.includes(friendId)
+                ? prev.filter(id => id !== friendId)
+                : [...prev, friendId]
+        );
+    };
+
+    const handleCreateGroupSubmit = async (e) => {
+        e.preventDefault();
+        if (!groupName.trim() || selectedMembers.length === 0) return;
+
+        try {
+            const res = await api.post("/groups", {
+                name: groupName.trim(),
+                memberIds: selectedMembers
+            });
+            if (res.data && res.data.success) {
+                const newGroup = res.data.data;
+                
+                // Lấy thông tin chi tiết cuộc trò chuyện qua endpoint gateway
+                const convRes = await api.get(`/conversations/${newGroup.conversationId}`);
+                if (convRes.data && convRes.data.success) {
+                    const conversation = convRes.data.data;
+                    setOpenChats(prev => {
+                        if (prev.some(c => c._id === conversation._id || c.id === conversation.id)) return prev;
+                        const newChats = [...prev, conversation];
+                        if (newChats.length > 3) newChats.shift();
+                        return newChats;
+                    });
+                }
+                
+                setGroupName("");
+                setSelectedMembers([]);
+                setShowCreateGroupModal(false);
+            }
+        } catch (err) {
+            console.error("❌ Lỗi tạo nhóm chat:", err);
+            alert("Không thể tạo nhóm chat!");
+        }
+    };
+
     if (!currentUser) return null;
 
     return (
         <>
             {/* Sidebar cố định bên phải (Right Sidebar) hiển thị danh sách bạn bè */}
-            <aside className="w-64 bg-slate-900/40 backdrop-blur-md border-l border-white/10 p-5 fixed right-0 top-0 h-screen flex flex-col pt-20">
-                <div className="flex items-center space-x-2 border-b border-white/10 pb-3 mb-4">
-                    <Users className="w-5 h-5 text-violet-400" />
-                    <h3 className="font-bold text-white text-sm">Bạn bè ({friends.length})</h3>
+            <aside className="w-64 bg-white border-l border-slate-200 p-5 fixed right-0 top-0 h-screen flex flex-col pt-20 shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <div className="flex items-center space-x-2">
+                        <Users className="w-5 h-5 text-violet-650" />
+                        <h3 className="font-bold text-slate-800 text-sm">Bạn bè ({friends.length})</h3>
+                    </div>
+                    <button
+                        onClick={() => setShowCreateGroupModal(true)}
+                        title="Tạo nhóm chat"
+                        className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-violet-600 transition cursor-pointer border border-slate-200"
+                    >
+                        <MessageSquarePlus className="w-4 h-4" />
+                    </button>
                 </div>
 
                 {isLoading ? (
@@ -136,7 +192,7 @@ const ChatWidget = () => {
                             return (
                                 <div
                                     key={friend.id}
-                                    className="flex items-center space-x-3 p-2 rounded-xl hover:bg-white/5 transition group"
+                                    className="flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-100 transition group"
                                 >
                                     {/* Nhấp ảnh đại diện -> Đi tới trang cá nhân */}
                                     <Link
@@ -145,11 +201,11 @@ const ChatWidget = () => {
                                     >
                                         <img
                                             src={friend.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
-                                            className="w-9 h-9 rounded-full object-cover border border-white/10"
+                                            className="w-9 h-9 rounded-full object-cover border border-slate-200"
                                             alt="Avatar"
                                         />
                                         {/* Chấm tròn báo trạng thái online/offline */}
-                                        <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${isOnline ? "bg-emerald-500" : "bg-slate-500"
+                                        <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${isOnline ? "bg-emerald-500" : "bg-slate-400"
                                             }`} />
                                     </Link>
 
@@ -158,7 +214,7 @@ const ChatWidget = () => {
                                         onClick={() => handleOpenChat(friend)}
                                         className="truncate flex-1 cursor-pointer"
                                     >
-                                        <p className="text-xs font-semibold text-slate-300 group-hover:text-white truncate transition">
+                                        <p className="text-xs font-semibold text-slate-700 group-hover:text-slate-950 truncate transition">
                                             {friend.displayName}
                                         </p>
                                     </div>
@@ -167,7 +223,7 @@ const ChatWidget = () => {
                         })}
                     </div>
                 ) : (
-                    <p className="text-center text-slate-500 text-xs py-8">Chưa có bạn bè để nhắn tin.</p>
+                    <p className="text-center text-slate-400 text-xs py-8">Chưa có bạn bè để nhắn tin.</p>
                 )}
             </aside>
 
@@ -187,6 +243,86 @@ const ChatWidget = () => {
                     </div>
                 ))}
             </div>
+
+            {/* Modal Tạo Nhóm Chat */}
+            {showCreateGroupModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-fadeIn">
+                        <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
+                            <h3 className="font-bold text-slate-800 text-sm">Tạo nhóm chat</h3>
+                            <button
+                                onClick={() => {
+                                    setShowCreateGroupModal(false);
+                                    setGroupName("");
+                                    setSelectedMembers([]);
+                                }}
+                                className="text-slate-400 hover:text-slate-850 transition cursor-pointer"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreateGroupSubmit} className="p-4 space-y-4">
+                            <div>
+                                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Tên nhóm</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={groupName}
+                                    onChange={(e) => setGroupName(e.target.value)}
+                                    placeholder="Nhập tên nhóm..."
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-600 transition"
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-[10px] text-slate-550 font-semibold uppercase mb-1.5">
+                                    Chọn thành viên ({selectedMembers.length})
+                                </label>
+                                {friends.length > 0 ? (
+                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                        {friends.map(friend => (
+                                            <div
+                                                key={friend.id}
+                                                onClick={() => handleToggleMember(friend.id)}
+                                                className={`flex items-center justify-between p-2 rounded-xl border transition cursor-pointer ${
+                                                    selectedMembers.includes(friend.id)
+                                                        ? "bg-violet-50 border border-violet-200"
+                                                        : "bg-slate-50 border-transparent hover:bg-slate-100"
+                                                }`}
+                                            >
+                                                <div className="flex items-center space-x-2.5">
+                                                    <img
+                                                        src={friend.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                                                        className="w-7 h-7 rounded-full object-cover border border-slate-200"
+                                                        alt="Friend Avatar"
+                                                    />
+                                                    <span className="text-xs text-slate-700 font-medium">{friend.displayName}</span>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedMembers.includes(friend.id)}
+                                                    readOnly
+                                                    className="w-3.5 h-3.5 accent-violet-600 rounded border-slate-200 cursor-pointer"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-slate-400 text-[10px] py-4">Không có bạn bè để tạo nhóm.</p>
+                                )}
+                            </div>
+                            
+                            <button
+                                type="submit"
+                                disabled={!groupName.trim() || selectedMembers.length === 0}
+                                className="w-full bg-violet-600 disabled:opacity-50 hover:bg-violet-700 text-white font-semibold py-2 px-4 rounded-xl text-xs transition cursor-pointer shadow-md shadow-violet-500/10"
+                            >
+                                Tạo nhóm
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
