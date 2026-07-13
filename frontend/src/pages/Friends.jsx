@@ -229,8 +229,8 @@ const Friends = () => {
             {/* Header trang */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-white tracking-tight bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">Mạng lưới bạn bè</h1>
-                    <p className="text-slate-400 text-sm mt-1">Kết nối, tìm kiếm bạn mới và phê duyệt lời mời kết bạn.</p>
+                    <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-violet-600 to-pink-600 bg-clip-text text-transparent">Mạng lưới bạn bè</h1>
+                    <p className="text-slate-650 text-sm mt-1">Kết nối, tìm kiếm bạn mới và phê duyệt lời mời kết bạn.</p>
                 </div>
 
                 {/* Thanh tìm kiếm người dùng */}
@@ -240,9 +240,9 @@ const Friends = () => {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Tìm bạn bè bằng tên/email..."
-                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 text-sm transition"
+                        className="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-10 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-600 text-sm transition shadow-sm"
                     />
-                    <button type="submit" className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer">
+                    <button type="submit" className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-800 cursor-pointer">
                         <Search className="w-5 h-5" />
                     </button>
                 </form>
@@ -250,42 +250,42 @@ const Friends = () => {
 
             {/* HIỂN THỊ KẾT QUẢ TÌM KIẾM (Nếu có gõ tìm kiếm) */}
             {searchResults.length > 0 && (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
-                    <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                        <Search className="w-4 h-4 text-violet-400" />
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center space-x-2">
+                        <Search className="w-4 h-4 text-violet-500" />
                         <span>Kết quả tìm kiếm ({searchResults.length})</span>
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {searchResults.map(u => {
                             const relation = searchStatuses[u.id] || { status: "none" };
                             return (
-                                <div key={u.id} className="flex items-center justify-between p-4 bg-slate-900/40 border border-white/5 rounded-xl">
+                                <div key={u.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl">
                                     <Link to={`/profile/${u.id}`} className="flex items-center space-x-3 group cursor-pointer">
-                                        <img src={u.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"} className="w-10 h-10 rounded-full border border-white/10 group-hover:opacity-80 transition object-cover" alt="Avatar" />
+                                        <img src={u.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"} className="w-10 h-10 rounded-full border border-slate-200 group-hover:opacity-80 transition object-cover" alt="Avatar" />
                                         <div>
-                                            <p className="font-semibold text-white text-sm group-hover:text-violet-400 transition">{u.displayName}</p>
-                                            <p className="text-xs text-slate-400">{u.email}</p>
+                                            <p className="font-semibold text-slate-800 text-sm group-hover:text-violet-600 transition">{u.displayName}</p>
+                                            <p className="text-xs text-slate-500">{u.email}</p>
                                         </div>
                                     </Link>
 
                                     {/* Các nút hành động tương ứng với trạng thái kết bạn */}
                                     {relation.status === "friends" && (
-                                        <button onClick={() => handleUnfriend(u.id)} className="flex items-center space-x-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs cursor-pointer transition">
+                                        <button onClick={() => handleUnfriend(u.id)} className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs cursor-pointer transition border border-rose-200/50">
                                             <UserMinus className="w-4 h-4" />
                                             <span>Hủy kết bạn</span>
                                         </button>
                                     )}
                                     {relation.status === "pending_sent" && (
-                                        <span className="text-xs text-slate-500 italic bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/5">Đã gửi yêu cầu</span>
+                                        <span className="text-xs text-slate-500 italic bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">Đã gửi yêu cầu</span>
                                     )}
                                     {relation.status === "pending_received" && (
-                                        <button onClick={() => handleAccept(relation.requestId, u.id)} className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-xs cursor-pointer transition">
+                                        <button onClick={() => handleAccept(relation.requestId, u.id)} className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs cursor-pointer transition border border-emerald-200/50">
                                             <UserCheck className="w-4 h-4" />
                                             <span>Chấp nhận</span>
                                         </button>
                                     )}
                                     {relation.status === "none" && (
-                                        <button onClick={() => handleSendRequest(u.id)} className="flex items-center space-x-1.5 px-3 py-1.5 bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 rounded-lg text-xs cursor-pointer transition">
+                                        <button onClick={() => handleSendRequest(u.id)} className="flex items-center space-x-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-600 rounded-lg text-xs cursor-pointer transition border border-violet-200/55">
                                             <UserPlus className="w-4 h-4" />
                                             <span>Kết bạn</span>
                                         </button>
@@ -302,27 +302,30 @@ const Friends = () => {
             )}
 
             {/* HỆ THỐNG TABS ĐIỀU HƯỚNG CHÍNH */}
-            <div className="flex border-b border-white/10">
+            <div className="flex border-b border-slate-200">
                 <button
                     onClick={() => setActiveTab("requests")}
-                    className={`flex items-center space-x-2 px-6 py-3 font-semibold text-sm border-b-2 transition cursor-pointer ${activeTab === "requests" ? "border-violet-500 text-violet-400" : "border-transparent text-slate-400 hover:text-slate-200"
-                        }`}
+                    className={`flex items-center space-x-2 px-6 py-3 font-semibold text-sm border-b-2 transition cursor-pointer ${
+                        activeTab === "requests" ? "border-violet-600 text-violet-600" : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
                 >
                     <span>Lời mời ({requests.length})</span>
                 </button>
                 <button
                     onClick={() => setActiveTab("list")}
-                    className={`flex items-center space-x-2 px-6 py-3 font-semibold text-sm border-b-2 transition cursor-pointer ${activeTab === "list" ? "border-violet-500 text-violet-400" : "border-transparent text-slate-400 hover:text-slate-200"
-                        }`}
+                    className={`flex items-center space-x-2 px-6 py-3 font-semibold text-sm border-b-2 transition cursor-pointer ${
+                        activeTab === "list" ? "border-violet-600 text-violet-600" : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
                 >
                     <span>Danh sách bạn bè ({friends.length})</span>
                 </button>
                 <button
                     onClick={() => setActiveTab("suggestions")}
-                    className={`flex items-center space-x-2 px-6 py-3 font-semibold text-sm border-b-2 transition cursor-pointer ${activeTab === "suggestions" ? "border-violet-500 text-violet-400" : "border-transparent text-slate-400 hover:text-slate-200"
-                        }`}
+                    className={`flex items-center space-x-2 px-6 py-3 font-semibold text-sm border-b-2 transition cursor-pointer ${
+                        activeTab === "suggestions" ? "border-violet-600 text-violet-600" : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
                 >
-                    <Sparkles className="w-4 h-4 text-yellow-400" />
+                    <Sparkles className="w-4 h-4 text-yellow-500" />
                     <span>Gợi ý bạn bè</span>
                 </button>
             </div>
@@ -337,24 +340,24 @@ const Friends = () => {
                         requests.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                                 {requests.map(r => (
-                                    <div key={r.id} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex items-center justify-between">
+                                    <div key={r.id} className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center justify-between shadow-sm">
                                         <Link to={`/profile/${r.fromUserId}`} className="flex items-center space-x-3 group cursor-pointer">
-                                            <img src={r.user?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"} className="w-12 h-12 rounded-full border border-white/10 group-hover:opacity-80 transition object-cover" alt="Avatar" />
+                                            <img src={r.user?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"} className="w-12 h-12 rounded-full border border-slate-200 group-hover:opacity-80 transition object-cover" alt="Avatar" />
                                             <div>
-                                                <p className="font-bold text-white group-hover:text-violet-400 transition">{r.user?.displayName}</p>
-                                                <p className="text-xs text-slate-400">Gửi lúc: {new Date(r.createdAt).toLocaleDateString()}</p>
+                                                <p className="font-bold text-slate-800 group-hover:text-violet-600 transition">{r.user?.displayName}</p>
+                                                <p className="text-xs text-slate-500">Gửi lúc: {new Date(r.createdAt).toLocaleDateString()}</p>
                                             </div>
                                         </Link>
                                         <div className="flex space-x-2">
                                             <button
                                                 onClick={() => handleAccept(r.id, r.fromUserId)}
-                                                className="px-3.5 py-2 bg-gradient-to-r from-violet-500 to-pink-500 text-white rounded-xl text-xs font-semibold cursor-pointer transition hover:opacity-90"
+                                                className="px-3.5 py-2 bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl text-xs font-semibold cursor-pointer transition hover:opacity-90 shadow-md shadow-violet-500/10"
                                             >
                                                 Đồng ý
                                             </button>
                                             <button
                                                 onClick={() => handleReject(r.id)}
-                                                className="px-3.5 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer transition"
+                                                className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold cursor-pointer transition border border-slate-200"
                                             >
                                                 Từ chối
                                             </button>
@@ -363,7 +366,7 @@ const Friends = () => {
                                 ))}
                             </div>
                         ) : (
-                            <div className="text-center py-12 text-slate-500 text-sm">Hộp thư trống. Không có lời mời kết bạn nào!</div>
+                            <div className="text-center py-12 text-slate-550 text-sm">Hộp thư trống. Không có lời mời kết bạn nào!</div>
                         )
                     )}
 
@@ -372,17 +375,17 @@ const Friends = () => {
                         friends.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn">
                                 {friends.map(f => (
-                                    <div key={f.id} className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center text-center space-y-3">
+                                    <div key={f.id} className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col items-center text-center space-y-3 shadow-sm">
                                         <Link to={`/profile/${f.id}`} className="group block cursor-pointer">
                                             <img src={f.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"} className="w-16 h-16 rounded-full border-2 border-violet-500/20 group-hover:opacity-80 transition object-cover" alt="Avatar" />
                                         </Link>
                                         <div>
-                                            <Link to={`/profile/${f.id}`} className="font-bold text-white text-sm hover:text-violet-400 transition block truncate max-w-[150px]">{f.displayName}</Link>
-                                            <p className="text-[11px] text-slate-400 truncate max-w-[150px]">{f.email}</p>
+                                            <Link to={`/profile/${f.id}`} className="font-bold text-slate-800 text-sm hover:text-violet-600 transition block truncate max-w-[150px]">{f.displayName}</Link>
+                                            <p className="text-[11px] text-slate-500 truncate max-w-[150px]">{f.email}</p>
                                         </div>
                                         <button
                                             onClick={() => handleUnfriend(f.id)}
-                                            className="w-full flex items-center justify-center space-x-1 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs cursor-pointer transition"
+                                            className="w-full flex items-center justify-center space-x-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs cursor-pointer transition border border-rose-200/50"
                                         >
                                             <UserMinus className="w-3.5 h-3.5" />
                                             <span>Hủy kết bạn</span>
@@ -391,7 +394,7 @@ const Friends = () => {
                                 ))}
                             </div>
                         ) : (
-                            <div className="text-center py-12 text-slate-500 text-sm">Bạn chưa kết bạn với ai. Hãy dùng ô tìm kiếm để tìm bạn bè mới nhé!</div>
+                            <div className="text-center py-12 text-slate-550 text-sm">Bạn chưa kết bạn với ai. Hãy dùng ô tìm kiếm để tìm bạn bè mới nhé!</div>
                         )
                     )}
 
@@ -400,17 +403,17 @@ const Friends = () => {
                         suggestions.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                                 {suggestions.map(s => (
-                                    <div key={s.id} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex items-center justify-between">
+                                    <div key={s.id} className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center justify-between shadow-sm">
                                         <Link to={`/profile/${s.id}`} className="flex items-center space-x-3 group cursor-pointer">
-                                            <img src={s.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"} className="w-12 h-12 rounded-full border border-white/10 group-hover:opacity-80 transition object-cover" alt="Avatar" />
+                                            <img src={s.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"} className="w-12 h-12 rounded-full border border-slate-200 group-hover:opacity-80 transition object-cover" alt="Avatar" />
                                             <div>
-                                                <p className="font-bold text-white group-hover:text-violet-400 transition">{s.displayName}</p>
-                                                <p className="text-xs text-violet-400 font-medium">{s.mutualFriendCount} bạn chung</p>
+                                                <p className="font-bold text-slate-800 group-hover:text-violet-600 transition">{s.displayName}</p>
+                                                <p className="text-xs text-violet-600 font-medium">{s.mutualFriendCount} bạn chung</p>
                                             </div>
                                         </Link>
                                         <button
                                             onClick={() => handleSendRequest(s.id)}
-                                            className="px-4 py-2 bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 rounded-xl text-xs font-semibold cursor-pointer transition"
+                                            className="px-4 py-2 bg-violet-50 hover:bg-violet-100 text-violet-600 rounded-xl text-xs font-semibold cursor-pointer transition border border-violet-250/50"
                                         >
                                             Thêm bạn
                                         </button>
@@ -418,7 +421,7 @@ const Friends = () => {
                                 ))}
                             </div>
                         ) : (
-                            <div className="text-center py-12 text-slate-500 text-sm">Chưa tìm thấy gợi ý bạn bè phù hợp dựa trên bạn chung.</div>
+                            <div className="text-center py-12 text-slate-550 text-sm">Chưa tìm thấy gợi ý bạn bè phù hợp dựa trên bạn chung.</div>
                         )
                     )}
                 </div>

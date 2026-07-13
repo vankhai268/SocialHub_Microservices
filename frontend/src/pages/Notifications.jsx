@@ -89,13 +89,13 @@ const Notifications = () => {
             case "post_liked":
                 return <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />;
             case "post_commented":
-                return <MessageSquare className="w-5 h-5 text-violet-400 fill-violet-400/20" />;
+                return <MessageSquare className="w-5 h-5 text-violet-600 fill-violet-600/10" />;
             case "post_shared":
-                return <Share2 className="w-5 h-5 text-sky-400" />;
+                return <Share2 className="w-5 h-5 text-sky-500" />;
             case "friend_request":
                 return <UserPlus className="w-5 h-5 text-amber-500" />;
             case "friend_accepted":
-                return <UserCheck className="w-5 h-5 text-emerald-400" />;
+                return <UserCheck className="w-5 h-5 text-emerald-600" />;
             default:
                 return <Bell className="w-5 h-5 text-slate-400" />;
         }
@@ -104,16 +104,16 @@ const Notifications = () => {
     return (
         <div className="space-y-6">
             {/* Header thông báo */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-white tracking-tight bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">Thông báo</h1>
-                    <p className="text-slate-400 text-sm mt-1">Nơi lưu lại các lượt tương tác của mọi người với bạn.</p>
+                    <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-violet-600 to-pink-600 bg-clip-text text-transparent">Thông báo</h1>
+                    <p className="text-slate-600 text-sm mt-1">Nơi lưu lại các lượt tương tác của mọi người với bạn.</p>
                 </div>
                 
                 {notifications.some(n => !n.isRead) && (
                     <button
                         onClick={handleMarkAllAsRead}
-                        className="flex items-center space-x-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-semibold text-slate-300 transition cursor-pointer"
+                        className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 transition cursor-pointer shadow-sm"
                     >
                         <Check className="w-4 h-4" />
                         <span>Đánh dấu đọc tất cả</span>
@@ -134,8 +134,8 @@ const Notifications = () => {
                             onClick={() => handleMarkAsRead(notif)}
                             className={`flex items-center justify-between p-4 rounded-2xl border transition duration-200 cursor-pointer ${
                                 notif.isRead
-                                    ? "bg-slate-900/20 border-white/5 hover:bg-slate-900/40 text-slate-300"
-                                    : "bg-white/5 border-violet-500/20 shadow-md shadow-violet-500/5 hover:bg-white/10 text-white"
+                                    ? "bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm"
+                                    : "bg-violet-50/50 border-violet-100 shadow-md shadow-violet-500/5 hover:bg-violet-100/30 text-slate-900"
                             }`}
                         >
                             <div className="flex items-center space-x-4">
@@ -144,30 +144,30 @@ const Notifications = () => {
                                     <img
                                         src={notif.fromUser?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
                                         alt="Avatar"
-                                        className="w-12 h-12 rounded-full border border-white/10 object-cover"
+                                        className="w-12 h-12 rounded-full border border-slate-200 object-cover"
                                     />
-                                    <div className="absolute -bottom-1 -right-1 p-1 bg-slate-900 rounded-full border border-white/10 shadow-sm">
+                                    <div className="absolute -bottom-1 -right-1 p-1 bg-white rounded-full border border-slate-200 shadow-sm">
                                         {getIcon(notif.type)}
                                     </div>
                                 </div>
                                 
                                 <div>
                                     <p className="text-sm font-medium leading-relaxed">{notif.message}</p>
-                                    <p className="text-xs text-slate-400 mt-1">{new Date(notif.createdAt).toLocaleString()}</p>
+                                    <p className="text-xs text-slate-500 mt-1">{new Date(notif.createdAt).toLocaleString()}</p>
                                 </div>
                             </div>
 
                             {/* Dấu chấm xanh báo hiệu chưa đọc */}
                             {!notif.isRead && (
-                                <div className="w-2.5 h-2.5 bg-violet-500 rounded-full animate-pulse shadow-md shadow-violet-500/50 mr-2"></div>
+                                <div className="w-2.5 h-2.5 bg-violet-600 rounded-full animate-pulse shadow-md shadow-violet-600/50 mr-2"></div>
                             )}
                         </div>
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-16 bg-white/5 border border-white/10 rounded-2xl p-8">
-                    <Bell className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400 text-lg">Hộp thư thông báo của bạn trống</p>
+                <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+                    <Bell className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                    <p className="text-slate-700 text-lg">Hộp thư thông báo của bạn trống</p>
                     <p className="text-slate-500 text-sm mt-1">Khi có người tương tác, kết bạn hoặc bình luận bài đăng của bạn, chúng sẽ xuất hiện ở đây.</p>
                 </div>
             )}

@@ -57,3 +57,16 @@ export const getMessages = async (req, res) => {
     return handleError(res, error, 'Get Messages Error');
   }
 };
+
+/**
+ * GET /conversations/:id
+ */
+export const getConversationById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const conversation = await conversationService.getConversationById(req.user.id, id);
+    return successResponse(res, 200, conversation);
+  } catch (error) {
+    return handleError(res, error, 'Get Conversation Error');
+  }
+};

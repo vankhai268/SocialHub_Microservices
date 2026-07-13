@@ -77,25 +77,25 @@ const CreatePost = ({ onPostCreated }) => {
     };
 
     return (
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl mb-6">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="flex items-start space-x-4">
                     <img
                         src={user?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
                         alt="Avatar"
-                        className="w-10 h-10 rounded-full border border-white/20"
+                        className="w-10 h-10 rounded-full border border-slate-200"
                     />
                     <textarea
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
                         placeholder={`${user?.displayName} ơi, hôm nay bạn đang nghĩ gì thế?`}
-                        className="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:outline-none resize-none min-h-[80px] text-lg"
+                        className="flex-1 bg-transparent border-none text-slate-850 placeholder-slate-400 focus:outline-none resize-none min-h-[80px] text-lg"
                     />
                 </div>
 
                 {/* Phần hiển thị ảnh xem trước (Preview) */}
                 {imagePreview && (
-                    <div className="relative rounded-xl overflow-hidden border border-white/10 max-h-[300px]">
+                    <div className="relative rounded-xl overflow-hidden border border-slate-200 max-h-[300px]">
                         <img src={imagePreview} alt="Preview" className="w-full object-cover max-h-[300px]" />
                         <button
                             type="button"
@@ -107,7 +107,7 @@ const CreatePost = ({ onPostCreated }) => {
                     </div>
                 )}
 
-                <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                <div className="flex items-center justify-between pt-4 border-t border-slate-105">
                     {/* Nút chọn ảnh ẩn */}
                     <input
                         type="file"
@@ -120,9 +120,9 @@ const CreatePost = ({ onPostCreated }) => {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isSubmitting}
-                        className="flex items-center space-x-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 transition cursor-pointer disabled:opacity-50 text-sm"
+                        className="flex items-center space-x-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-600 border border-slate-200 transition cursor-pointer disabled:opacity-50 text-sm"
                     >
-                        <Image className="w-5 h-5 text-emerald-400" />
+                        <Image className="w-5 h-5 text-emerald-500" />
                         <span>Hình ảnh</span>
                     </button>
 
@@ -130,7 +130,7 @@ const CreatePost = ({ onPostCreated }) => {
                     <button
                         type="submit"
                         disabled={isSubmitting || (!content.trim() && !imageFile)}
-                        className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 rounded-xl text-white font-semibold transition duration-200 transform active:scale-95 disabled:opacity-50 cursor-pointer text-sm"
+                        className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 rounded-xl text-white font-semibold transition duration-200 transform active:scale-95 disabled:opacity-50 cursor-pointer text-sm shadow-md shadow-violet-500/10"
                     >
                         {isSubmitting ? (
                             <Loader className="w-4 h-4 animate-spin" />

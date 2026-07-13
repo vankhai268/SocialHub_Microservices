@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom"; // <-- Import thêm Link để điều hướng
 import api from "../services/api";
-import { Heart, MessageSquare, Share2, Trash2, Send, Loader } from "lucide-react";
+import { Heart, MessageSquare, Share2, Trash2, Send, Loader, Edit3 } from "lucide-react";
 import ShareModal from "./ShareModal";
+import EditPostModal from "./EditPostModal";
 import { useAuth } from "../context/AuthContext"; // <-- Import useAuth
 
-const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
+const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpdated }) => {
     const { user: currentUser } = useAuth(); // Lấy thông tin user hiện tại
+    const [showEditModal, setShowEditModal] = useState(false);
     const [isLiked, setIsLiked] = useState(post.isLikedByMe || false);
     const [likeCount, setLikeCount] = useState(post.like_count || 0);
     const [commentCount, setCommentCount] = useState(post.comment_count || 0);
@@ -42,28 +44,84 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
         }, 100);
     };
 
-    // Hàm phân giải nội dung bình luận để xác định xem có phải là phản hồi không và tag ai
+    // Hàm phân giải nội dung bình luận để xác định xem có phải là phản hồi không và tag ai, parentId là gì
     const parseComment = (text) => {
-        if (!text) return { isReply: false, mentionName: "", cleanText: "" };
+        if (!text) return { isReply: false, parentId: null, mentionName: "", cleanText: "" };
         
-        // 1. Dạng mới: [reply] nội dung
-        if (text.startsWith("[reply]")) {
-            return { isReply: true, mentionName: "", cleanText: text.substring(7).trim() };
+        // 1. Dạng mới có parentId và mention: [reply:parentId:@Tên] nội dung
+        const matchFull = text.match(/^\[reply:([0-9a-fA-F-]+):@([^\]]+)\]/);
+        if (matchFull) {
+            return { isReply: true, parentId: matchFull[1], mentionName: matchFull[2], cleanText: text.substring(matchFull[0].length).trim() };
         }
         
-        // 2. Dạng mới: [reply:@Tên] nội dung
-        const matchReplyTag = text.match(/^\[reply:@([^\]]+)\]/);
-        if (matchReplyTag) {
-            return { isReply: true, mentionName: matchReplyTag[1], cleanText: text.substring(matchReplyTag[0].length).trim() };
-        }
-        
-        // 3. Dạng cũ (tương thích ngược): @Tên: nội dung
-        const matchOldTag = text.match(/^@([^:]+):/);
-        if (matchOldTag) {
-            return { isReply: true, mentionName: matchOldTag[1], cleanText: text.substring(matchOldTag[0].length).trim() };
+        // 2. Dạng mới chỉ có parentId: [reply:parentId] nội dung
+        const matchParent = text.match(/^\[reply:([0-9a-fA-F-]+)\]/);
+        if (matchParent) {
+            return { isReply: true, parentId: matchParent[1], mentionName: "", cleanText: text.substring(matchParent[0].length).trim() };
         }
 
-        return { isReply: false, mentionName: "", cleanText: text };
+        // 3. Dạng cũ không có parentId: [reply] nội dung
+        if (text.startsWith("[reply]")) {
+            return { isReply: true, parentId: null, mentionName: "", cleanText: text.substring(7).trim() };
+        }
+        
+        // 4. Dạng cũ: [reply:@Tên] nội dung
+        const matchReplyTag = text.match(/^\[reply:@([^\]]+)\]/);
+        if (matchReplyTag) {
+            return { isReply: true, parentId: null, mentionName: matchReplyTag[1], cleanText: text.substring(matchReplyTag[0].length).trim() };
+        }
+        
+        // 5. Dạng cũ (tương thích ngược): @Tên: nội dung
+        const matchOldTag = text.match(/^@([^:]+):/);
+        if (matchOldTag) {
+            return { isReply: true, parentId: null, mentionName: matchOldTag[1], cleanText: text.substring(matchOldTag[0].length).trim() };
+        }
+
+        return { isReply: false, parentId: null, mentionName: "", cleanText: text };
+    };
+
+    // Phân nhóm bình luận: bình luận gốc (parents) và bình luận phản hồi (replies) theo parentId
+    const getStructuredComments = () => {
+        const parsed = comments.map(c => ({
+            ...c,
+            parsedInfo: parseComment(c.content)
+        }));
+
+        const parents = [];
+        const repliesByParent = {}; // parentId -> array of replies
+
+        parsed.forEach(c => {
+            const cId = c.id || c._id;
+            
+            if (c.parsedInfo.isReply && c.parsedInfo.parentId && parsed.some(p => (p.id || p._id) === c.parsedInfo.parentId)) {
+                const pId = c.parsedInfo.parentId;
+                if (!repliesByParent[pId]) repliesByParent[pId] = [];
+                repliesByParent[pId].push(c);
+            } else if (c.parsedInfo.isReply && !c.parsedInfo.parentId) {
+                // Hỗ trợ định dạng cũ không có parentId:
+                // Tìm comment cha gần nhất được đăng trước đó mà không phải là reply, 
+                // hoặc mặc định coi như parent comment
+                let foundParent = null;
+                const currentIndex = parsed.findIndex(item => (item.id || item._id) === cId);
+                for (let i = currentIndex - 1; i >= 0; i--) {
+                    if (!parsed[i].parsedInfo.isReply) {
+                        foundParent = parsed[i];
+                        break;
+                    }
+                }
+                if (foundParent) {
+                    const pId = foundParent.id || foundParent._id;
+                    if (!repliesByParent[pId]) repliesByParent[pId] = [];
+                    repliesByParent[pId].push(c);
+                } else {
+                    parents.push(c);
+                }
+            } else {
+                parents.push(c);
+            }
+        });
+
+        return { parents, repliesByParent };
     };
 
     // 1. Lấy Presigned URL cho ảnh đính kèm của bài viết
@@ -170,11 +228,12 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
         let finalContent = commentText.trim();
         if (replyingTo) {
             const replyAuthor = replyingTo.author;
+            const parentId = replyingTo.id || replyingTo._id;
             // Nếu phản hồi chính mình (cùng ID hoặc cùng tên hiển thị)
             if (replyingTo.author_id === currentUserId || replyAuthor?.id === currentUserId || replyAuthor?.displayName === currentUser?.displayName) {
-                finalContent = `[reply] ${commentText.trim()}`;
+                finalContent = `[reply:${parentId}] ${commentText.trim()}`;
             } else {
-                finalContent = `[reply:@${replyAuthor?.displayName || "Người dùng"}] ${commentText.trim()}`;
+                finalContent = `[reply:${parentId}:@${replyAuthor?.displayName || "Người dùng"}] ${commentText.trim()}`;
             }
         }
 
@@ -239,8 +298,23 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
         }
     };
 
+    // 9. Nhận phản hồi cập nhật từ EditPostModal
+    const handlePostUpdated = (updatedPost) => {
+        const mergedPost = {
+            ...updatedPost,
+            author: post.author,
+            isLikedByMe: isLiked,
+            like_count: likeCount,
+            comment_count: commentCount,
+            share_count: shareCount
+        };
+        if (onPostUpdated) {
+            onPostUpdated(mergedPost);
+        }
+    };
+
     return (
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-lg mb-6">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
             {/* Header: Thông tin tác giả - Click để về trang cá nhân */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
@@ -248,47 +322,56 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
                         <img
                             src={post.author?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
                             alt="Author Avatar"
-                            className="w-10 h-10 rounded-full border border-white/20 object-cover group-hover:opacity-85 transition"
+                            className="w-10 h-10 rounded-full border border-slate-200 object-cover group-hover:opacity-85 transition"
                         />
                     </Link>
                     <div>
-                        <Link to={`/profile/${post.author_id}`} className="font-semibold text-white text-sm hover:text-violet-400 transition">
+                        <Link to={`/profile/${post.author_id}`} className="font-semibold text-slate-800 text-sm hover:text-violet-600 transition">
                             {post.author?.displayName || "Người dùng SocialHub"}
                         </Link>
-                        <p className="text-xs text-slate-400 mt-0.5">{new Date(post.created_at || post.createdAt).toLocaleString()}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{new Date(post.created_at || post.createdAt).toLocaleString()}</p>
                     </div>
                 </div>
 
-                {/* Nút xóa bài đăng (chỉ hiển thị nếu là chủ nhân bài đăng) */}
+                {/* Nút sửa/xóa bài đăng (chỉ hiển thị nếu là chủ nhân bài đăng) */}
                 {post.author_id === currentUserId && (
-                    <button
-                        onClick={handleDeletePost}
-                        className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition cursor-pointer"
-                        title="Xóa bài viết"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                        <button
+                            onClick={() => setShowEditModal(true)}
+                            className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-650 rounded-xl transition cursor-pointer"
+                            title="Sửa bài viết"
+                        >
+                            <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={handleDeletePost}
+                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition cursor-pointer"
+                            title="Xóa bài viết"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
                 )}
             </div>
 
             {/* Nội dung chữ */}
-            <p className="text-slate-200 text-base mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+            <p className="text-slate-700 text-base mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
 
             {/* Ảnh đính kèm */}
             {imageUrl && (
-                <div className="rounded-xl overflow-hidden border border-white/10 mb-4 bg-slate-955/60 flex justify-center">
+                <div className="rounded-xl overflow-hidden border border-slate-200 mb-4 bg-slate-50 flex justify-center">
                     <img src={imageUrl} alt="Post Attachment" className="w-full max-h-[450px] object-contain" />
                 </div>
             )}
             {isLoadingImage && (
-                <div className="h-48 bg-white/5 animate-pulse rounded-xl flex items-center justify-center text-slate-500 mb-4">
+                <div className="h-48 bg-slate-50 animate-pulse rounded-xl flex items-center justify-center text-slate-400 mb-4">
                     Đang tải hình ảnh...
                 </div>
             )}
 
             {/* Nếu là bài chia sẻ, hiển thị bài gốc nhúng lồng bên trong (Nested Card) */}
             {post.is_shared && post.original_post_id && (
-                <div className="border border-white/10 rounded-2xl p-4 bg-slate-950/40 mb-4 space-y-3 hover:border-violet-500/30 transition">
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 mb-4 space-y-3 hover:border-violet-500/30 transition">
                     {isLoadingOriginal ? (
                         <div className="flex justify-center py-4">
                             <Loader className="w-5 h-5 text-violet-500 animate-spin" />
@@ -300,47 +383,47 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
                                 <Link to={`/profile/${originalPost.author_id}`} className="block group">
                                     <img
                                         src={originalPost.author?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
-                                        className="w-7 h-7 rounded-full border border-white/10 object-cover group-hover:opacity-85 transition"
+                                        className="w-7 h-7 rounded-full border border-slate-200 object-cover group-hover:opacity-85 transition"
                                         alt="Original Author"
                                     />
                                 </Link>
                                 <div>
-                                    <Link to={`/profile/${originalPost.author_id}`} className="font-semibold text-white text-xs hover:text-violet-400 transition">
+                                    <Link to={`/profile/${originalPost.author_id}`} className="font-semibold text-slate-800 text-xs hover:text-violet-600 transition">
                                         {originalPost.author?.displayName}
                                     </Link>
-                                    <p className="text-[10px] text-slate-400 mt-0.5">{new Date(originalPost.created_at || originalPost.createdAt).toLocaleString()}</p>
+                                    <p className="text-[10px] text-slate-500 mt-0.5">{new Date(originalPost.created_at || originalPost.createdAt).toLocaleString()}</p>
                                 </div>
                             </div>
                             {/* Nội dung chữ bài gốc */}
-                            <p className="text-slate-300 text-xs leading-relaxed whitespace-pre-wrap">{originalPost.content}</p>
+                            <p className="text-slate-600 text-xs leading-relaxed whitespace-pre-wrap">{originalPost.content}</p>
                             {/* Ảnh đính kèm bài gốc */}
                             {originalImageUrl && (
-                                <div className="rounded-xl overflow-hidden border border-white/5 bg-slate-950/60 max-w-md flex justify-center mt-2">
+                                <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 max-w-md flex justify-center mt-2">
                                     <img src={originalImageUrl} className="w-full max-h-48 object-contain" alt="Original Attachment" />
                                 </div>
                             )}
                         </>
                     ) : (
-                        <p className="text-slate-500 text-xs italic">Bài viết gốc đã bị xóa hoặc không thể truy cập.</p>
+                        <p className="text-slate-400 text-xs italic">Bài viết gốc đã bị xóa hoặc không thể truy cập.</p>
                     )}
                 </div>
             )}
 
             {/* Footer tương tác */}
-            <div className="flex items-center justify-between pt-4 border-t border-white/5 text-slate-400 text-sm">
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100 text-slate-500 text-sm">
                 {/* Nút Thích */}
                 <button
                     onClick={handleLike}
-                    className={`flex items-center space-x-2 hover:text-rose-500 transition cursor-pointer ${isLiked ? "text-rose-500 font-bold" : ""}`}
+                    className={`flex items-center space-x-2 hover:text-rose-500 transition cursor-pointer ${isLiked ? "text-rose-600 font-bold" : ""}`}
                 >
-                    <Heart className={`w-5 h-5 ${isLiked ? "fill-rose-500" : ""}`} />
+                    <Heart className={`w-5 h-5 ${isLiked ? "fill-rose-600" : ""}`} />
                     <span>{likeCount} Thích</span>
                 </button>
 
                 {/* Nút Bình luận */}
                 <button
                     onClick={() => setShowComments(!showComments)}
-                    className={`flex items-center space-x-2 hover:text-violet-400 transition cursor-pointer ${showComments ? "text-violet-400 font-bold" : ""}`}
+                    className={`flex items-center space-x-2 hover:text-violet-600 transition cursor-pointer ${showComments ? "text-violet-600 font-bold" : ""}`}
                 >
                     <MessageSquare className="w-5 h-5" />
                     <span>{commentCount} Bình luận</span>
@@ -349,7 +432,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
                 {/* Nút Chia sẻ */}
                 <button
                     onClick={() => setShowShareModal(true)}
-                    className="flex items-center space-x-2 hover:text-sky-400 transition cursor-pointer"
+                    className="flex items-center space-x-2 hover:text-sky-600 transition cursor-pointer"
                 >
                     <Share2 className="w-5 h-5" />
                     <span>{shareCount} Chia sẻ</span>
@@ -358,15 +441,15 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
 
             {/* BẢNG BÌNH LUẬN ACCORDION */}
             {showComments && (
-                <div className="mt-4 pt-4 border-t border-white/5 space-y-4 animate-fadeIn">
+                <div className="mt-4 pt-4 border-t border-slate-100 space-y-4 animate-fadeIn">
                     {/* Banner hiển thị đang phản hồi ai */}
                     {replyingTo && (
-                        <div className="flex items-center justify-between bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-1.5 text-[10px] text-violet-300">
-                            <span>Đang phản hồi <strong>{replyingTo.author?.displayName}</strong></span>
+                        <div className="flex items-center justify-between bg-violet-50 border border-violet-100 rounded-xl px-4 py-1.5 text-[10px] text-violet-700">
+                            <span>Đang Phản hồi <strong>{replyingTo.author?.displayName}</strong></span>
                             <button
                                 type="button"
                                 onClick={() => setReplyingTo(null)}
-                                className="text-slate-400 hover:text-red-400 font-bold transition ml-2 cursor-pointer"
+                                className="text-slate-500 hover:text-red-500 font-bold transition ml-2 cursor-pointer"
                             >
                                 Hủy
                             </button>
@@ -381,7 +464,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
                             value={commentText}
                             onChange={(e) => setCommentText(e.target.value)}
                             placeholder={replyingTo ? `Phản hồi ${replyingTo.author?.displayName}...` : "Viết bình luận..."}
-                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
+                            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-600 transition"
                         />
                         <button
                             type="submit"
@@ -403,63 +486,124 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
                         </div>
                     ) : comments.length > 0 ? (
                         <div className="space-y-3.5 max-h-60 overflow-y-auto pr-1">
-                            {comments.map((comment) => {
-                                const cId = comment.id || comment._id;
-                                const isCommentAuthor = comment.author_id === currentUserId;
-                                const isPostAuthor = post.author_id === currentUserId;
-                                const { isReply, mentionName, cleanText } = parseComment(comment.content);
+                            {(() => {
+                                const { parents, repliesByParent } = getStructuredComments();
                                 
-                                return (
-                                    <div key={cId} className={`flex items-start justify-between bg-white/5 rounded-2xl p-3 border border-white/5 group transition-all duration-200 ${isReply ? "ml-8 bg-slate-900/35 border-violet-500/10" : ""}`}>
-                                        <div className="flex items-start space-x-3">
-                                            <img
-                                                src={comment.author?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
-                                                className="w-8 h-8 rounded-full border border-white/10 object-cover"
-                                                alt="Commenter Avatar"
-                                            />
-                                            <div>
-                                                <div className="flex items-center space-x-2">
-                                                    <span className="font-bold text-white text-xs">{comment.author?.displayName}</span>
-                                                    <span className="text-[10px] text-slate-500">{new Date(comment.created_at || comment.createdAt).toLocaleString()}</span>
-                                                </div>
-                                                <p className="text-slate-300 text-xs mt-1 leading-relaxed whitespace-pre-wrap">
-                                                    {isReply && mentionName ? (
-                                                        <span>
-                                                            <span className="text-violet-400 font-semibold cursor-pointer hover:underline mr-1.5">
-                                                                @{mentionName}
-                                                            </span>
-                                                            {cleanText}
-                                                        </span>
-                                                    ) : (
-                                                        cleanText
-                                                    )}
-                                                </p>
-                                                
-                                                {/* Nút Phản hồi dưới mỗi bình luận */}
-                                                <button
-                                                    onClick={() => handleReplyClick(comment)}
-                                                    className="text-[10px] text-slate-500 hover:text-violet-400 font-semibold mt-1 transition cursor-pointer"
-                                                >
-                                                    Phản hồi
-                                                </button>
-                                            </div>
-                                        </div>
+                                return parents.map((parentComment) => {
+                                    const parentId = parentComment.id || parentComment._id;
+                                    const isParentAuthor = parentComment.author_id === currentUserId;
+                                    const isPostAuthor = post.author_id === currentUserId;
+                                    const parentReplies = repliesByParent[parentId] || [];
 
-                                        {/* Nút xóa bình luận (Chỉ hiển thị cho chủ bình luận hoặc chủ bài viết) */}
-                                        {(isCommentAuthor || isPostAuthor) && (
-                                            <button
-                                                onClick={() => handleDeleteComment(cId)}
-                                                className="p-1 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                    return (
+                                        <div key={parentId} className="space-y-2">
+                                            {/* Bình luận gốc */}
+                                            <div className="flex items-start justify-between bg-slate-50/50 rounded-2xl p-3 border border-slate-100 group transition-all duration-200">
+                                                <div className="flex items-start space-x-3">
+                                                    <img
+                                                        src={parentComment.author?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                                                        className="w-8 h-8 rounded-full border border-slate-200 object-cover"
+                                                        alt="Commenter Avatar"
+                                                    />
+                                                    <div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className="font-bold text-slate-800 text-xs">{parentComment.author?.displayName}</span>
+                                                            <span className="text-[10px] text-slate-500">{new Date(parentComment.created_at || parentComment.createdAt).toLocaleString()}</span>
+                                                        </div>
+                                                        <p className="text-slate-600 text-xs mt-1 leading-relaxed whitespace-pre-wrap">
+                                                            {parentComment.parsedInfo?.mentionName ? (
+                                                                <span>
+                                                                    <span className="text-violet-600 font-semibold cursor-pointer hover:underline mr-1.5">
+                                                                        @{parentComment.parsedInfo.mentionName}
+                                                                    </span>
+                                                                    {parentComment.parsedInfo.cleanText}
+                                                                </span>
+                                                            ) : (
+                                                                parentComment.parsedInfo?.cleanText || parentComment.content
+                                                            )}
+                                                        </p>
+                                                        
+                                                        {/* Nút Phản hồi */}
+                                                        <button
+                                                            onClick={() => handleReplyClick(parentComment)}
+                                                            className="text-[10px] text-slate-500 hover:text-violet-600 font-semibold mt-1 transition cursor-pointer"
+                                                        >
+                                                            Phản hồi
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Nút xóa bình luận cha */}
+                                                {(isParentAuthor || isPostAuthor) && (
+                                                    <button
+                                                        onClick={() => handleDeleteComment(parentId)}
+                                                        className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Danh sách các phản hồi lồng dưới */}
+                                            {parentReplies.map((reply) => {
+                                                const rId = reply.id || reply._id;
+                                                const isReplyAuthor = reply.author_id === currentUserId;
+                                                
+                                                return (
+                                                    <div key={rId} className="flex items-start justify-between bg-violet-50/40 rounded-2xl p-3 border border-violet-100/50 ml-8 group transition-all duration-200">
+                                                        <div className="flex items-start space-x-3">
+                                                            <img
+                                                                src={reply.author?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                                                                className="w-8 h-8 rounded-full border border-slate-200 object-cover"
+                                                                alt="Commenter Avatar"
+                                                            />
+                                                            <div>
+                                                                <div className="flex items-center space-x-2">
+                                                                    <span className="font-bold text-slate-800 text-xs">{reply.author?.displayName}</span>
+                                                                    <span className="text-[10px] text-slate-500">{new Date(reply.created_at || reply.createdAt).toLocaleString()}</span>
+                                                                </div>
+                                                                <p className="text-slate-600 text-xs mt-1 leading-relaxed whitespace-pre-wrap">
+                                                                    {reply.parsedInfo?.mentionName ? (
+                                                                        <span>
+                                                                            <span className="text-violet-600 font-semibold cursor-pointer hover:underline mr-1.5">
+                                                                                @{reply.parsedInfo.mentionName}
+                                                                            </span>
+                                                                            {reply.parsedInfo.cleanText}
+                                                                        </span>
+                                                                    ) : (
+                                                                        reply.parsedInfo?.cleanText || reply.content
+                                                                    )}
+                                                                </p>
+                                                                
+                                                                {/* Nút Phản hồi (để phản hồi tiếp trên cùng nhánh cha) */}
+                                                                <button
+                                                                    onClick={() => handleReplyClick(parentComment)}
+                                                                    className="text-[10px] text-slate-500 hover:text-violet-600 font-semibold mt-1 transition cursor-pointer"
+                                                                >
+                                                                    Phản hồi
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Nút xóa phản hồi */}
+                                                        {(isReplyAuthor || isPostAuthor) && (
+                                                            <button
+                                                                onClick={() => handleDeleteComment(rId)}
+                                                                className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                });
+                            })()}
                         </div>
                     ) : (
-                        <p className="text-center text-slate-500 text-xs py-4">Chưa có bình luận nào. Hãy gửi lời bình luận đầu tiên!</p>
+                        <p className="text-center text-slate-400 text-xs py-4">Chưa có bình luận nào. Hãy gửi lời bình luận đầu tiên!</p>
                     )}
                 </div>
             )}
@@ -470,6 +614,16 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted }) => {
                     post={post}
                     onClose={() => setShowShareModal(false)}
                     onShareSuccess={handleShareSuccess}
+                />
+            )}
+
+            {/* POP-UP MODAL CHỈNH SỬA BÀI VIẾT */}
+            {showEditModal && (
+                <EditPostModal
+                    post={post}
+                    imageUrl={imageUrl}
+                    onClose={() => setShowEditModal(false)}
+                    onPostUpdated={handlePostUpdated}
                 />
             )}
         </div>
