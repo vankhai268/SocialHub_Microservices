@@ -10,6 +10,7 @@ const PostCard = ({ post, currentUserId }) => {
 
     // 1. Lấy Presigned URL cho ảnh từ media-service thông qua Gateway
     useEffect(() => {
+        let localUrl = "";
         const fetchImageUrl = async () => {
             if (post.media_ids && post.media_ids.length > 0) {
                 setIsLoadingImage(true);
@@ -18,11 +19,12 @@ const PostCard = ({ post, currentUserId }) => {
                     const res = await api.get(`/media/${mediaId}/url`);
                     if (res.data && res.data.url) {
                         const url = res.data.url;
-                        if (url.startsWith("http")) {
-                            setImageUrl(url);
-                        } else {
-                            setImageUrl(`${api.defaults.baseURL}${url}`);
-                        }
+                        const fullUrl = url.startsWith("http") ? url : `${api.defaults.baseURL}${url}`;
+                        
+                        // Tải hình ảnh dưới dạng blob thông qua Axios để đính kèm header ngrok-skip-browser-warning
+                        const imgRes = await api.get(fullUrl, { responseType: "blob" });
+                        localUrl = URL.createObjectURL(imgRes.data);
+                        setImageUrl(localUrl);
                     }
                 } catch (error) {
                     console.error("❌ Lỗi lấy link ảnh:", error.message);
@@ -32,6 +34,12 @@ const PostCard = ({ post, currentUserId }) => {
             }
         };
         fetchImageUrl();
+
+        return () => {
+            if (localUrl) {
+                URL.revokeObjectURL(localUrl);
+            }
+        };
     }, [post.media_ids]);
 
     // 2. Thao tác Thích / Bỏ Thích bài đăng
