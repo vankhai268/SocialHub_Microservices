@@ -133,8 +133,41 @@ const Friends = () => {
         try {
             const res = await api.put(`/friends/requests/${requestId}/accept`);
             if (res.data && res.data.success) {
+                // Lấy thông tin user gửi yêu cầu từ danh sách requests hoặc searchResults hiện tại
+                const acceptedRequest = requests.find(r => r.id === requestId);
+                let newFriend = null;
+
+                if (acceptedRequest && acceptedRequest.user) {
+                    newFriend = {
+                        id: fromUserId,
+                        displayName: acceptedRequest.user.displayName,
+                        avatarUrl: acceptedRequest.user.avatarUrl,
+                        email: acceptedRequest.user.email
+                    };
+                } else {
+                    const searchUser = searchResults.find(u => u.id === fromUserId);
+                    if (searchUser) {
+                        newFriend = {
+                            id: fromUserId,
+                            displayName: searchUser.displayName,
+                            avatarUrl: searchUser.avatarUrl,
+                            email: searchUser.email
+                        };
+                    }
+                }
+
+                // Cập nhật ngay lập tức vào danh sách bạn bè (friends state)
+                if (newFriend) {
+                    setFriends(prev => {
+                        // Đảm bảo không trùng lặp
+                        if (prev.some(f => f.id === fromUserId)) return prev;
+                        return [...prev, newFriend];
+                    });
+                }
+
                 // Xóa khỏi danh sách lời mời
                 setRequests(prev => prev.filter(r => r.id !== requestId));
+                
                 // Nếu đang ở ô tìm kiếm, cập nhật trạng thái hiển thị
                 if (searchStatuses[fromUserId]) {
                     setSearchStatuses(prev => ({

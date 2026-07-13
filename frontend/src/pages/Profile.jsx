@@ -102,9 +102,21 @@ const Profile = () => {
 
                 {userPosts.length > 0 ? (
                     <div className="space-y-6">
-                        {userPosts.map((post) => (
-                            <PostCard key={post.id} post={post} currentUserId={loggedInUser?.id} />
-                        ))}
+                        {userPosts.map((post) => {
+                            const handlePostShared = (newSharedPost) => {
+                                if (isOwnProfile) {
+                                    setUserPosts(prev => [newSharedPost, ...prev]);
+                                }
+                            };
+                            return (
+                                <PostCard 
+                                    key={post.id} 
+                                    post={post} 
+                                    currentUserId={loggedInUser?.id} 
+                                    onPostShared={handlePostShared} 
+                                />
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="text-center py-12 bg-white/5 border border-white/10 rounded-2xl text-slate-400">
