@@ -177,8 +177,8 @@ export const startConsumer = async () => {
           }
 
           case 'message.sent': {
-            const { senderId, conversationId, recipientId, preview } = payload;
-            recipientId = recipientId;
+            const { senderId, conversationId, recipientId: recipientIdVal, preview } = payload;
+            recipientId = recipientIdVal;
             actorId = senderId;
 
             const actor = await getUserDetails(actorId);
