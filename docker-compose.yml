@@ -6,205 +6,230 @@
 services:
   # ─── Frontend ────────────────────────────────────
   # frontend:
-  #   build: ./frontend
+  #   build:
+  #     context: ./frontend
+  #     args:
+  #       - VITE_API_URL=http://localhost:${GATEWAY_PORT:-8080}/api
   #   ports:
   #     - "${FRONTEND_PORT:-3000}:3000"
   #   deploy:
   #     resources:
   #       limits:
-  #         cpus: '0.5'        # Tối đa dùng nửa nhân CPU
-  #         memory: 256M       # Tối đa dùng 256MB RAM
+  #         cpus: '0.3'        # Limit CPU usage
+  #         memory: 128M       # Limit RAM usage (very light as Nginx serves static assets)
   #       reservations:
   #         cpus: '0.1'
-  #         memory: 128M
+  #         memory: 64M
   #   depends_on:
   #     - gateway
   #   networks:
   #     - app-network
-  #   environment:
-  #     - VITE_API_URL=http://localhost:${GATEWAY_PORT:-8080}/api
-  #     - VITE_WS_URL=http://localhost:${GATEWAY_PORT:-8080}
 
   # ─── API Gateway ─────────────────────────────────
-  # gateway:
-  #   build: ./gateway
-  #   ports:
-  #     - "${GATEWAY_PORT:-8080}:8000"
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.5'        # Tối đa dùng nửa nhân CPU
-  #         memory: 256M       # Tối đa dùng 256MB RAM
-  #       reservations:
-  #         cpus: '0.1'
-  #         memory: 128M
-  #   depends_on:
-  #     - user-service
-  #     - media-service
-  #   env_file:
-  #     - .env
-  #   networks:
-  #     - app-network
-  #   healthcheck:
-  #     test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  gateway:
+    build: ./gateway
+    ports:
+      - "${GATEWAY_PORT:-8080}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'        # Max half CPU core
+          memory: 256M       # Max 256MB RAM
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    depends_on:
+      user-service:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ─── user-service (Identity & Access) ────────────
-  # user-service:
-  #   build: ./services/user-service
-  #   ports:
-  #     - "${USER_SERVICE_PORT:-5001}:5000"
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.5'        # Tối đa dùng nửa nhân CPU
-  #         memory: 256M       # Tối đa dùng 256MB RAM
-  #       reservations:
-  #         cpus: '0.1'
-  #         memory: 128M
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     pg:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "${USER_SERVICE_PORT:-5001}:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    env_file:
+      - .env
+    environment:
+      - PG_DATABASE=socialhub_user
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ─── friend-service (Social Graph) ───────────────
-  # friend-service:
-  #   build: ./services/friend-service
-  #   ports:
-  #     - "${FRIEND_SERVICE_PORT:-5002}:5000"
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.5'        # Tối đa dùng nửa nhân CPU
-  #         memory: 256M       # Tối đa dùng 256MB RAM
-  #       reservations:
-  #         cpus: '0.1'
-  #         memory: 128M
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     pg:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  friend-service:
+    build: ./services/friend-service
+    ports:
+      - "${FRIEND_SERVICE_PORT:-5002}:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    env_file:
+      - .env
+    environment:
+      - PG_DATABASE=socialhub_friend
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ─── post-service (Content) ──────────────────────
-  # post-service:
-  #   build: ./services/post-service
-  #   ports:
-  #     - "${POST_SERVICE_PORT:-5003}:5000"
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     DATABASE_URL: postgresql://${PG_USER:-socialhub}:${PG_PASSWORD:-socialhub_secret}@pg:5432/socialhub_post?schema=public
-  #   depends_on:
-  #     pg:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  post-service:
+    build: ./services/post-service
+    ports:
+      - "${POST_SERVICE_PORT:-5003}:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${PG_USER:-socialhub}:${PG_PASSWORD:-socialhub_secret}@pg:5432/socialhub_post?schema=public
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # chat-service:
-  #   build: ./services/chat-service
-  #   ports:
-  #     - "${CHAT_SERVICE_PORT:-5004}:5000"
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - MONGO_URI=mongodb://${MONGO_USER:-socialhub}:${MONGO_PASSWORD:-socialhub_secret}@mongo:27017/socialhub_chat?authSource=admin
-  #   depends_on:
-  #     mongo:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  # ─── chat-service (Chat & Websockets) ────────────
+  chat-service:
+    build: ./services/chat-service
+    ports:
+      - "${CHAT_SERVICE_PORT:-5004}:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://${MONGO_USER:-socialhub}:${MONGO_PASSWORD:-socialhub_secret}@mongo:27017/${MONGO_DATABASE:-socialhub}?authSource=admin
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ─── media-service (Media) ───────────────────────
-  # media-service:
-  #   build: ./services/media-service
-  #   ports:
-  #     - "${MEDIA_SERVICE_PORT:-5005}:5000"
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.5'        # Tối đa dùng nửa nhân CPU
-  #         memory: 256M       # Tối đa dùng 256MB RAM
-  #       reservations:
-  #         cpus: '0.1'
-  #         memory: 128M
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     minio:
-  #       condition: service_healthy
-  #     mongo:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
-  #   healthcheck:
-  #     test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  media-service:
+    build: ./services/media-service
+    ports:
+      - "${MEDIA_SERVICE_PORT:-5005}:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    env_file:
+      - .env
+    environment:
+      - MINIO_PORT=9000
+    depends_on:
+      minio:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ─── notification-service (Notification) ─────────
-  # notification-service:
-  #   build: ./services/notification-service
-  #   ports:
-  #     - "${NOTIFICATION_SERVICE_PORT:-5006}:5000"
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.5'        # Tối đa dùng nửa nhân CPU
-  #         memory: 256M       # Tối đa dùng 256MB RAM
-  #       reservations:
-  #         cpus: '0.1'
-  #         memory: 128M
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     mongo:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  notification-service:
+    build: ./services/notification-service
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-5006}:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    env_file:
+      - .env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ─── Infrastructure ─────────────────────────────
 
@@ -217,6 +242,11 @@ services:
       POSTGRES_DB: ${PG_DATABASE:-socialhub}
       POSTGRES_USER: ${PG_USER:-socialhub}
       POSTGRES_PASSWORD: ${PG_PASSWORD:-socialhub_secret}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
     volumes:
       - pg-data:/var/lib/postgresql/data
       - ./scripts/init-pg.sql:/docker-entrypoint-initdb.d/init-pg.sql
@@ -238,6 +268,11 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-socialhub}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-socialhub_secret}
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-socialhub}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
     volumes:
       - mongo-data:/data/db
     networks:
@@ -305,7 +340,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 384M # Thêm giao diện quản lý cần nhiều RAM hơn
+          memory: 384M
     networks:
       - app-network
     healthcheck:
