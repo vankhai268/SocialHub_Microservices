@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-service
+  labels:
+    app: media-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: media-service
+  template:
+    metadata:
+      labels:
+        app: media-service
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: media-service
+        image: IMAGE_PLACEHOLDER_MEDIA_SERVICE
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        env:
+        - name: PORT
+          value: "5000"
+        - name: MONGO_URI
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MONGO_URI
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: JWT_SECRET
+        - name: MINIO_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MINIO_ENDPOINT
+        - name: MINIO_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MINIO_PORT
+        - name: MINIO_USE_SSL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MINIO_USE_SSL
+        - name: MINIO_BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MINIO_BUCKET_NAME
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: MINIO_ACCESS_KEY
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: MINIO_SECRET_KEY
+        - name: PRESIGNED_URL_TTL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: PRESIGNED_URL_TTL
+        - name: MAX_FILE_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MAX_FILE_SIZE
+        - name: MAX_VIDEO_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MAX_VIDEO_SIZE
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: media-service
+spec:
+  ports:
+  - port: 5000
+    targetPort: 5000
+  selector:
+    app: media-service

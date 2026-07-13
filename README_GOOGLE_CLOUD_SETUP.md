@@ -104,23 +104,41 @@ gcloud compute addresses create socialhub-private-ip-alloc --global --purpose=VP
 gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com --ranges=socialhub-private-ip-alloc --network=socialhub-vpc
 ```
 
-### 2. Tạo Google Cloud SQL for PostgreSQL (Cấu hình High Availability - HA):
-Khởi tạo Postgres instance không gán IP công cộng, chỉ cho phép kết nối nội bộ từ VPC:
+### 2. Tạo Google Cloud SQL for PostgreSQL (Tối ưu chi phí cho Dev):
+Khởi tạo Postgres instance không gán IP công cộng, cấu hình đơn vùng (ZONAL) và tài nguyên vừa đủ để tiết kiệm chi phí:
 ```bash
 gcloud beta sql instances create socialhub-db-postgres \
     --database-version=POSTGRES_16 \
-    --tier=db-custom-2-7680 \
+    --edition=ENTERPRISE \
+    --tier=db-custom-1-3840 \
     --region=asia-east1 \
-    --availability-type=REGIONAL \
+    --availability-type=ZONAL \
     --network=projects/socialhub-micro-service-1/global/networks/socialhub-vpc \
     --no-assign-ip \
-    --enable-private-path
+    --enable-google-private-path
+```
+*(Lưu ý: Nếu chạy Production, bạn nên đổi sang `--availability-type=REGIONAL` để có High Availability và nâng tier cấu hình lên).*
+
+Kết quả:
+```bash
+Creating Cloud SQL instance for POSTGRES_16.. done.                                                                                                                                                                  
+Created [https://sqladmin.googleapis.com/sql/v1beta4/projects/socialhub-micro-service-1/instances/socialhub-db-postgres].
+NAME: socialhub-db-postgres
+DATABASE_VERSION: POSTGRES_16
+LOCATION: asia-east1-c
+TIER: db-custom-1-3840
+PRIMARY_ADDRESS: -
+PRIVATE_ADDRESS: ...
+STATUS: RUNNABLE
 ```
 
-### 3. Tạo Google Cloud Memorystore for Redis (HA Mode):
+
+### 3. Tạo Google Cloud Memorystore for Redis (Tối ưu chi phí cho Dev):
+Khởi tạo Redis với gói `BASIC` (đơn vùng) và dung lượng tối thiểu `1GB` để tiết kiệm chi phí (mặc định không có replication):
 ```bash
 gcloud redis instances create socialhub-redis \
-    --size=2 \
+    --tier=BASIC \
+    --size=1 \
     --region=asia-east1 \
     --network=socialhub-vpc \
     --connect-mode=private-service-access
@@ -145,6 +163,23 @@ gcloud container clusters create-auto socialhub-gke-cluster \
     --subnetwork=socialhub-subnet-asia \
     --enable-private-nodes \
     --master-ipv4-cidr=172.16.0.0/28
+```
+
+Kết quả:
+```bash
+Creating cluster socialhub-gke-cluster in asia-east1... Cluster is being health-checked (Kubernetes Control Plane is healthy)...done.                                                                                
+Created [https://container.googleapis.com/v1/projects/socialhub-micro-service-1/zones/asia-east1/clusters/socialhub-gke-cluster].
+To inspect the contents of your cluster, go to: https://console.cloud.google.com/kubernetes/workload_/gcloud/asia-east1/socialhub-gke-cluster?project=socialhub-micro-service-1
+kubeconfig entry generated for socialhub-gke-cluster.
+NAME: socialhub-gke-cluster
+LOCATION: asia-east1
+MASTER_VERSION: 1.35.5-gke.1241004
+MASTER_IP:
+MACHINE_TYPE: ek-standard-8
+NODE_VERSION: 1.35.5-gke.1241004
+NUM_NODES: 3
+STATUS: RUNNING
+STACK_TYPE: IP..
 ```
 
 ---
@@ -196,6 +231,8 @@ gcloud projects add-iam-policy-binding socialhub-micro-service-1 \
     --role="roles/storage.admin"
 ```
 
+**Cần làm xong hết bước 1 -> 6 này**
+
 ---
 
 ## 🔐 Bước 7: Tạo Và Cấu Hình Khóa Bảo Mật (Secret Manager)
@@ -208,7 +245,7 @@ Tránh lưu các thông tin nhạy cảm như mật khẩu database, JWT_SECRET 
     gcloud secrets create socialhub-jwt-secret --replication-policy="automatic"
     
     # Ghi đè giá trị bí mật
-    echo -n "chuoi-bi-mat-jwt-an-toan-cua-ban" | gcloud secrets versions add socialhub-jwt-secret --data-file=-
+    echo -n "congdaojwttoken123" | gcloud secrets versions add socialhub-jwt-secret --data-file=-
     ```
 2.  **Tạo mật khẩu cơ sở dữ liệu Postgres**:
     ```bash
@@ -216,10 +253,106 @@ Tránh lưu các thông tin nhạy cảm như mật khẩu database, JWT_SECRET 
     gcloud secrets create socialhub-db-password --replication-policy="automatic"
     
     # Ghi đè giá trị mật khẩu Postgres
-    echo -n "mat-khau-database-socialhub" | gcloud secrets versions add socialhub-db-password --data-file=-
+    echo -n "socialhub_secret" | gcloud secrets versions add socialhub-db-password --data-file=-
     ```
 
 ---
 
 ## 🚀 Hoàn Tất Thiết Lập!
 Hạ tầng GCP của bạn đã sẵn sàng. Bước tiếp theo là cấu hình tệp pipeline `cloudbuild.yaml` trong mã nguồn và chạy lệnh kích hoạt build tự động để đẩy ứng dụng lên đám mây Google!
+
+---
+
+## 💵 Chiến Lược Tối Ưu Chi Phí Khi Phát Triển (Cost Optimization)
+
+Hạ tầng đám mây nếu để chạy liên tục không sử dụng sẽ phát sinh chi phí hàng tháng khá lớn. Dưới đây là cách bạn có thể cấu hình tối ưu hoặc tạm dừng các dịch vụ khi không code:
+
+### 1. Google Kubernetes Engine (GKE) Autopilot
+*   **Giá thuê cụm (Cluster Management Fee)**: GKE thu phí quản lý là $0.10/giờ (~$73/tháng). Tuy nhiên, Google Cloud tặng **Free Tier credit $74.40/tháng** cho mỗi tài khoản, nghĩa là nếu bạn chỉ duy trì duy nhất 1 cụm GKE này, phí quản lý cụm sẽ **hoàn toàn miễn phí (0 USD)**.
+*   **Chi phí tài nguyên VM (Node)**: GKE Autopilot chỉ tính tiền dựa trên lượng tài nguyên (CPU, RAM) mà các Pod đang chạy yêu cầu.
+    *   **Tận dụng Spot Pods (Giảm 60-90% chi phí)**: Bạn có thể yêu cầu GKE chạy ứng dụng của mình trên các máy ảo Spot giá rẻ bằng cách thêm `nodeSelector` và `tolerations` vào các file deployment manifest `.yaml` của ứng dụng:
+        ```yaml
+        spec:
+          nodeSelector:
+            cloud.google.com/gke-spot: "true"
+          tolerations:
+          - key: "cloud.google.com/gke-spot"
+            operator: "Equal"
+            value: "true"
+            effect: "NoSchedule"
+        ```
+    *   **Tạm dừng (Scale-to-Zero)**: Khi kết thúc ca làm việc và không cần test, hãy scale tất cả các Deployment của bạn về **0 replica** (ví dụ: `kubectl scale deployment auth-service --replicas=0`). Khi không có Pod nào chạy, GKE Autopilot sẽ thu hồi toàn bộ máy ảo và bạn sẽ **không tốn một đồng chi phí tài nguyên nào**.
+
+### 2. Google Cloud SQL (PostgreSQL)
+*   **Tạm dừng khi không dùng**: Cloud SQL tính tiền theo giờ hoạt động của instance độc lập với việc có kết nối hay không. Bạn có thể tạm dừng (Stop) instance qua dòng lệnh khi nghỉ để chỉ phải trả tiền lưu trữ disk rất nhỏ (không mất tiền CPU/RAM):
+    *   **Tắt Database**:
+        ```bash
+        gcloud sql instances patch socialhub-db-postgres --activation-policy=NEVER
+        ```
+    *   **Bật lại Database**:
+        ```bash
+        gcloud sql instances patch socialhub-db-postgres --activation-policy=ALWAYS
+        ```
+
+### 3. Memorystore (Redis) và Cloud NAT
+*   **Redis**: Memorystore không hỗ trợ tạm dừng. Giải pháp tiết kiệm là xóa đi khi không dùng lâu ngày và tạo lại (hoặc chuyển sang chạy Redis container ngay trong cụm GKE sử dụng Spot VM).
+*   **Cloud NAT Gateway**: Có mức phí cố định khoảng ~$30/tháng để duy trì. Nếu bạn dừng code dự án trong vài tuần, nên xóa NAT Gateway và Cloud Router đi và chạy lại lệnh tạo khi cần thiết.
+
+---
+
+## 🧹 Hướng Dẫn Xóa Hoàn Toàn Tài Nguyên (Resource Cleanup)
+
+Khi muốn kết thúc dự án hoặc dọn dẹp sạch sẽ toàn bộ tài nguyên trên tài khoản GCP để tránh bị trừ tiền ngoài ý muốn, hãy mở Cloud Shell và chạy các lệnh sau theo thứ tự (các tài nguyên phụ thuộc sẽ được xóa trước):
+
+```bash
+# 1. Xóa cụm GKE Autopilot (quá trình này mất khoảng 5-10 phút)
+gcloud container clusters delete socialhub-gke-cluster --region=asia-east1 --quiet
+
+# 2. Xóa cơ sở dữ liệu Cloud SQL
+gcloud sql instances delete socialhub-db-postgres --quiet
+
+# 3. Xóa Memorystore Redis
+gcloud redis instances delete socialhub-redis --region=asia-east1 --quiet
+
+# 4. Xóa NAT Gateway & Cloud Router
+gcloud compute routers nats delete socialhub-nat --router=socialhub-router --region=asia-east1 --quiet
+gcloud compute routers delete socialhub-router --region=asia-east1 --quiet
+
+# Trước khi xóa VPC cần xem các cái phụ thuộc đã xóa được hết chưa
+# Kiểm tra Cloud SQL
+gcloud sql instances list
+
+# Kiểm tra Memorystore Redis
+gcloud redis instances list --region=asia-east1
+
+
+# 5. Xóa VPC Peering và Mạng VPC
+gcloud services vpc-peerings delete --network=socialhub-vpc --service=servicenetworking.googleapis.com --quiet
+
+gcloud compute addresses delete socialhub-private-ip-alloc --global --quiet
+gcloud compute networks subnets delete socialhub-subnet-asia --region=asia-east1 --quiet
+gcloud compute networks delete socialhub-vpc --quiet
+
+# => Vì 4 Lệnh trên dễ lỗi vì nhiều cái phụ thuộc.
+# Xóa các cái ở dưới trước
+
+# 5.1. Xóa Subnet trước
+gcloud compute networks subnets delete socialhub-subnet-asia --region=asia-east1 --quiet
+
+# 5.2. Xóa địa chỉ IP đã cấp phát
+gcloud compute addresses delete socialhub-private-ip-alloc --global --quiet
+
+# 5.3. Xóa mạng VPC (nó sẽ tự động ép xóa các liên kết peering liên quan nếu các tài nguyên đích đã mất)
+gcloud compute networks delete socialhub-vpc --quiet
+
+
+# 6. Xóa Cloud Storage Bucket
+gcloud storage buckets delete gs://socialhub-media-bucket-1 --quiet
+
+# 7. Xóa Artifact Registry (Kho chứa Docker)
+gcloud artifacts repositories delete socialhub-repo --location=asia-east1 --quiet
+
+# 8. Xóa Secret Manager
+gcloud secrets delete socialhub-jwt-secret --quiet
+gcloud secrets delete socialhub-db-password --quiet
+```

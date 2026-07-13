@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: post-service
+  labels:
+    app: post-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: post-service
+  template:
+    metadata:
+      labels:
+        app: post-service
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: post-service
+        image: IMAGE_PLACEHOLDER_POST_SERVICE
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        env:
+        - name: PORT
+          value: "5000"
+        - name: PG_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: PG_HOST
+        - name: PG_USER
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: PG_USER
+        - name: PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: PG_PASSWORD
+        # K8s tự động nội suy biến khi sử dụng cú pháp $(VAR) được định nghĩa phía trên
+        - name: DATABASE_URL
+          value: "postgresql://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST):5432/socialhub_post?schema=public"
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: REDIS_URL
+        - name: USER_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: USER_SERVICE_URL
+        - name: MEDIA_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MEDIA_SERVICE_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: JWT_SECRET
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: post-service
+spec:
+  ports:
+  - port: 5000
+    targetPort: 5000
+  selector:
+    app: post-service

@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: notification-service
+        image: IMAGE_PLACEHOLDER_NOTIFICATION_SERVICE
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        env:
+        - name: PORT
+          value: "5000"
+        - name: MONGO_URI
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MONGO_URI
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: REDIS_URL
+        - name: RABBITMQ_URL
+          value: "amqp://socialhub:socialhub_secret@rabbitmq:5672" # Thay thế nếu dùng RabbitMQ managed hoặc IP khác
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: JWT_SECRET
+        - name: USER_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: USER_SERVICE_URL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+spec:
+  ports:
+  - port: 5000
+    targetPort: 5000
+  selector:
+    app: notification-service

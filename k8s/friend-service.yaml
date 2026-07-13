@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: friend-service
+  labels:
+    app: friend-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: friend-service
+  template:
+    metadata:
+      labels:
+        app: friend-service
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: friend-service
+        image: IMAGE_PLACEHOLDER_FRIEND_SERVICE
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        env:
+        - name: PORT
+          value: "5000"
+        - name: PG_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: PG_HOST
+        - name: PG_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: PG_PORT
+        - name: PG_USER
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: PG_USER
+        - name: PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: PG_PASSWORD
+        - name: PG_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: PG_DATABASE_FRIEND
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: REDIS_PORT
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: JWT_SECRET
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: friend-service
+spec:
+  ports:
+  - port: 5000
+    targetPort: 5000
+  selector:
+    app: friend-service

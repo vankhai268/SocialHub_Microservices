@@ -1,0 +1,122 @@
+steps:
+  # ─────────────────────────────────────────────────────────────────────────
+  # BUILD & PUSH DOCKER IMAGES (Chạy song song nhờ waitFor: ['-'])
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # 1. API Gateway
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-gateway'
+    waitFor: ['-']
+    args: ['build', '-t', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/gateway:$COMMIT_SHA', './gateway']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-gateway'
+    waitFor: ['build-gateway']
+    args: ['push', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/gateway:$COMMIT_SHA']
+
+  # 2. User Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-user'
+    waitFor: ['-']
+    args: ['build', '-t', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/user-service:$COMMIT_SHA', './services/user-service']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-user'
+    waitFor: ['build-user']
+    args: ['push', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/user-service:$COMMIT_SHA']
+
+  # 3. Friend Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-friend'
+    waitFor: ['-']
+    args: ['build', '-t', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/friend-service:$COMMIT_SHA', './services/friend-service']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-friend'
+    waitFor: ['build-friend']
+    args: ['push', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/friend-service:$COMMIT_SHA']
+
+  # 4. Post Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-post'
+    waitFor: ['-']
+    args: ['build', '-t', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/post-service:$COMMIT_SHA', './services/post-service']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-post'
+    waitFor: ['build-post']
+    args: ['push', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/post-service:$COMMIT_SHA']
+
+  # 5. Media Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-media'
+    waitFor: ['-']
+    args: ['build', '-t', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/media-service:$COMMIT_SHA', './services/media-service']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-media'
+    waitFor: ['build-media']
+    args: ['push', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/media-service:$COMMIT_SHA']
+
+  # 6. Notification Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-notification'
+    waitFor: ['-']
+    args: ['build', '-t', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/notification-service:$COMMIT_SHA', './services/notification-service']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-notification'
+    waitFor: ['build-notification']
+    args: ['push', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/notification-service:$COMMIT_SHA']
+
+  # 7. Chat Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-chat'
+    waitFor: ['-']
+    args: ['build', '-t', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/chat-service:$COMMIT_SHA', './services/chat-service']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-chat'
+    waitFor: ['build-chat']
+    args: ['push', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/chat-service:$COMMIT_SHA']
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DEPLOY TO GKE AUTOPILOT (Chạy sau khi toàn bộ ảnh đã push thành công)
+  # ─────────────────────────────────────────────────────────────────────────
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-gke'
+    # Chỉ chạy deploy sau khi đã hoàn thành push toàn bộ 7 images
+    waitFor:
+      - 'push-gateway'
+      - 'push-user'
+      - 'push-friend'
+      - 'push-post'
+      - 'push-media'
+      - 'push-notification'
+      - 'push-chat'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== ĐĂNG NHẬP VÀO CỤM GKE AUTOPILOT ==="
+        gcloud container clusters get-credentials socialhub-gke-cluster --region=asia-east1
+
+        echo "=== THAY THẾ IMAGE TAGS TRONG KUBERNETES MANIFESTS ==="
+        sed -i 's|IMAGE_PLACEHOLDER_GATEWAY|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/gateway:$COMMIT_SHA|g' k8s/gateway.yaml
+        sed -i 's|IMAGE_PLACEHOLDER_USER_SERVICE|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/user-service:$COMMIT_SHA|g' k8s/user-service.yaml
+        sed -i 's|IMAGE_PLACEHOLDER_FRIEND_SERVICE|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/friend-service:$COMMIT_SHA|g' k8s/friend-service.yaml
+        sed -i 's|IMAGE_PLACEHOLDER_POST_SERVICE|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/post-service:$COMMIT_SHA|g' k8s/post-service.yaml
+        sed -i 's|IMAGE_PLACEHOLDER_MEDIA_SERVICE|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/media-service:$COMMIT_SHA|g' k8s/media-service.yaml
+        sed -i 's|IMAGE_PLACEHOLDER_NOTIFICATION_SERVICE|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/notification-service:$COMMIT_SHA|g' k8s/notification-service.yaml
+        sed -i 's|IMAGE_PLACEHOLDER_CHAT_SERVICE|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/chat-service:$COMMIT_SHA|g' k8s/chat-service.yaml
+
+        echo "=== TRIỂN KHAI LÊN GKE ==="
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/secrets.yaml
+        kubectl apply -f k8s/
+
+        echo "=== KIỂM TRA TRẠNG THÁI TRIỂN KHAI ==="
+        kubectl rollout status deployment/gateway
+        kubectl rollout status deployment/user-service
+
+# ─────────────────────────────────────────────────────────────────────────
+# TỐI ƯU HÓA VM BUILD VÀ GIỚI HẠN VÙNG (Tăng tốc build, chỉ chạy ở asia-east1)
+# ─────────────────────────────────────────────────────────────────────────
+options:
+  # Sử dụng máy ảo lớn 8 vCPU, 8 GB RAM để hỗ trợ build song song 7 docker cùng lúc nhanh chóng
+  machineType: 'E2_HIGHCPU_8'
+  # Ghi log trực tiếp lên Cloud Logging
+  logging: CLOUD_LOGGING_ONLY

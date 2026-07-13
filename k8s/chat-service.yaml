@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-service
+  labels:
+    app: chat-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-service
+  template:
+    metadata:
+      labels:
+        app: chat-service
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: chat-service
+        image: IMAGE_PLACEHOLDER_CHAT_SERVICE
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        env:
+        - name: PORT
+          value: "5000"
+        - name: MONGO_URI
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MONGO_URI
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: REDIS_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: JWT_SECRET
+        - name: USER_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: USER_SERVICE_URL
+        - name: MEDIA_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MEDIA_SERVICE_URL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-service
+spec:
+  ports:
+  - port: 5000
+    targetPort: 5000
+  selector:
+    app: chat-service

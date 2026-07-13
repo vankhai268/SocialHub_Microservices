@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      # --- Cấu hình chạy trên Spot VM để tối ưu chi phí ---
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: gateway
+        image: IMAGE_PLACEHOLDER_GATEWAY
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        env:
+        - name: PORT
+          value: "8000"
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: ENVIRONMENT
+        - name: USER_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: USER_SERVICE_URL
+        - name: FRIEND_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: FRIEND_SERVICE_URL
+        - name: POST_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: POST_SERVICE_URL
+        - name: CHAT_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: CHAT_SERVICE_URL
+        - name: MEDIA_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: MEDIA_SERVICE_URL
+        - name: NOTIFICATION_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: NOTIFICATION_SERVICE_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: JWT_SECRET
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: REDIS_URL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  type: LoadBalancer # Cấp phát IP Public để truy cập API Gateway từ ngoài Internet
+  ports:
+  - port: 8080
+    targetPort: 8000
+  selector:
+    app: gateway
