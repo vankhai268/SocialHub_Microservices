@@ -130,23 +130,45 @@ const Messages = () => {
         fetchConversations();
     }, []);
 
-    // 2. Lắng nghe sự kiện nhắn tin Realtime qua Socket.IO Chat Namespace
+    // 2. Join và tự động Re-join room Websocket khi socket mất kết nối rồi tự kết nối lại (reconnect)
+    useEffect(() => {
+        if (!chatSocket || !selectedConv) return;
+        const cId = selectedConv._id || selectedConv.id;
+
+        const joinRoom = () => {
+            chatSocket.emit("conversation:join", { conversationId: cId });
+            console.log(`📡 Đã kết nối & gửi yêu cầu join conversation room: ${cId}`);
+        };
+
+        joinRoom();
+
+        // Lắng nghe sự kiện kết nối lại để tự động join lại room
+        chatSocket.on("connect", joinRoom);
+
+        return () => {
+            chatSocket.off("connect", joinRoom);
+        };
+    }, [selectedConv, chatSocket]);
+
+    // 2b. Lắng nghe sự kiện nhắn tin Realtime qua Socket.IO Chat Namespace
     useEffect(() => {
         if (!chatSocket) return;
 
         const handleNewMessage = (msg) => {
             if (selectedConv) {
                 const cId = selectedConv._id || selectedConv.id;
-                if (msg.conversationId === cId) {
+                if (String(msg.conversationId) === String(cId)) {
                     setMessages((prev) => [...prev, msg]);
+                    // Đánh dấu đã đọc gửi ngược lại
+                    chatSocket.emit("message:read", { conversationId: cId, messageId: msg.id || msg._id });
                 }
             }
             fetchConversations();
         };
 
-        chatSocket.on("message:new", handleNewMessage);
+        chatSocket.on("message:received", handleNewMessage);
         return () => {
-            chatSocket.off("message:new", handleNewMessage);
+            chatSocket.off("message:received", handleNewMessage);
         };
     }, [chatSocket, selectedConv]);
 
@@ -199,7 +221,7 @@ const Messages = () => {
     // 4. Gửi tin nhắn (Văn bản và/hoặc nhiều Ảnh/Video)
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!selectedConv) return;
+        if (!selectedConv || !chatSocket) return;
         if (!inputText.trim() && selectedFiles.length === 0) return;
 
         const cId = selectedConv._id || selectedConv.id;
@@ -222,21 +244,23 @@ const Messages = () => {
                 uploadedMediaIds = resIds.filter(Boolean);
             }
 
-            // Gửi từng media kèm theo hoặc tin nhắn tổng thể
+            // Gửi từng media kèm theo hoặc tin nhắn tổng thể qua socket
             if (uploadedMediaIds.length > 0) {
                 for (let i = 0; i < uploadedMediaIds.length; i++) {
                     const mId = uploadedMediaIds[i];
                     const isLast = i === uploadedMediaIds.length - 1;
                     const contentText = isLast && inputText.trim() ? inputText.trim() : "Sent an image";
 
-                    await api.post(`/conversations/${cId}/messages`, {
+                    chatSocket.emit("message:send", {
+                        conversationId: cId,
                         content: contentText,
                         type: "image",
                         mediaId: mId
                     });
                 }
             } else if (inputText.trim()) {
-                await api.post(`/conversations/${cId}/messages`, {
+                chatSocket.emit("message:send", {
+                    conversationId: cId,
                     content: inputText.trim(),
                     type: "text"
                 });
@@ -246,13 +270,6 @@ const Messages = () => {
             setInputText("");
             selectedFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl));
             setSelectedFiles([]);
-
-            // Refetch messages & conversations
-            const res = await api.get(`/conversations/${cId}/messages`);
-            if (res.data && res.data.success) {
-                setMessages(res.data.data || []);
-            }
-            fetchConversations();
         } catch (err) {
             console.error("❌ Lỗi gửi tin nhắn:", err.message);
             alert("Không thể gửi tin nhắn. Vui lòng thử lại!");
