@@ -128,9 +128,66 @@ DATABASE_VERSION: POSTGRES_16
 LOCATION: asia-east1-c
 TIER: db-custom-1-3840
 PRIMARY_ADDRESS: -
-PRIVATE_ADDRESS: ...
+PRIVATE_ADDRESS: 10.128.0.6  <--- Ghi nhớ IP này để cập nhật vào PG_HOST trong k8s/configmap.yaml
 STATUS: RUNNABLE
 ```
+
+#### 🔒 BẮT BUỘC: Khởi tạo User và 3 Database Schemas (Cloud SQL mặc định sẽ rỗng):
+Khi khởi tạo xong, instance chỉ có tài khoản quản trị mặc định `postgres`. Bạn bắt buộc phải chạy các lệnh sau để tạo tài khoản kết nối và phân vùng database cho các microservices:
+
+1.  **Tạo database user `socialhub`**:
+    *   Hãy đặt mật khẩu cho user này (Ví dụ: `socialhub_secret`):
+        ```bash
+        gcloud sql users create socialhub \
+            --instance=socialhub-db-postgres \
+            --password=socialhub_secret
+        ```
+2.  **Tạo 3 database tương ứng cho 3 dịch vụ**:
+    ```bash
+    # Phân vùng database cho dịch vụ Quản lý người dùng
+    gcloud sql databases create socialhub_user --instance=socialhub-db-postgres
+
+    # Phân vùng database cho dịch vụ Bạn bè
+    gcloud sql databases create socialhub_friend --instance=socialhub-db-postgres
+
+    # Phân vùng database cho dịch vụ Bài viết
+    gcloud sql databases create socialhub_post --instance=socialhub-db-postgres
+    ```
+
+3.  **Mã hóa Base64 mật khẩu và nạp vào file `k8s/secrets.yaml`**:
+    *   Kubernetes yêu cầu mật mã lưu trong secret phải được mã hóa dạng Base64. Hãy chạy lệnh sau trên máy của bạn (hoặc Cloud Shell) để lấy chuỗi Base64:
+        ```bash
+        echo -n "mật_khẩu_bạn_đặt_ở_trên" | base64
+        # Ví dụ: echo -n "socialhub_secret" | base64 -> c29jaWFsaHViX3NlY3JldA==
+        ```
+    *   Mở file `k8s/secrets.yaml` ở local máy của bạn, dán chuỗi Base64 nhận được vào trường `PG_PASSWORD`:
+        ```yaml
+        PG_PASSWORD: c29jaWFsaHViX3NlY3JldA==
+        ```
+
+#### ⚠️ KHẮC PHỤC LỖI THIẾU EXTENSION UUID CHO POST-SERVICE (BẮT BUỘC):
+Dịch vụ `post-service` sử dụng UUID làm khóa chính cho các bảng dữ liệu và yêu cầu extension `uuid-ossp` để sinh ID tự động. Cloud SQL mặc định sẽ không tự kích hoạt extension này, gây ra lỗi crash pod (`Exit Code 1` với thông báo `unrecognized function uuid_generate_v4()`). 
+
+Hãy khắc phục bằng các lệnh dưới đây trên **Cloud Shell** (sau khi cụm GKE đã được tạo thành công):
+
+1.  **Đặt mật khẩu cho tài khoản root `postgres`**:
+    ```bash
+    gcloud sql users set-password postgres \
+        --instance=socialhub-db-postgres \
+        --password=socialhub_secret
+    ```
+2.  **Chạy PostgreSQL Client tạm thời trong GKE để kích hoạt extension**:
+    ```bash
+    kubectl run pg-client --rm -i --tty --image=postgres:16 \
+        --env="PGPASSWORD=socialhub_secret" \
+        -- psql -h 10.128.0.6 -U postgres -d socialhub_post -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+    ```
+3.  **Khởi động lại Pod `post-service` để tự động chạy lại database migration**:
+    ```bash
+    kubectl delete pod -l app=post-service
+    ```
+
+---
 
 
 ### 3. Tạo Google Cloud Memorystore for Redis (Tối ưu chi phí cho Dev):
@@ -157,6 +214,51 @@ gcloud storage buckets create gs://socialhub-media-bucket-1 \
     --location=asia-east1 \
     --uniform-bucket-level-access
 ```
+
+#### Tạo HMAC Access Key & Secret Key để kết nối (Tương thích S3 API):
+Vì `media-service` kết nối với GCS thông qua giao thức S3 (MinIO client), bạn cần tạo khóa xác thực HMAC để lấy **Access Key** và **Secret Key**:
+
+1.  **Chạy lệnh tạo khóa HMAC trên Cloud Shell**:
+    *   *Mặc định*: Chạy lệnh tạo HMAC cho tài khoản Compute Engine chạy GKE:
+        ```bash
+        PROJECT_NUM=$(gcloud projects describe socialhub-micro-service-1 --format="value(projectNumber)")
+        
+        gcloud storage hmac create ${PROJECT_NUM}-compute@developer.gserviceaccount.com
+        ```
+
+2.  **⚠️ Giải quyết lỗi cấm tạo khóa (Constraint `iam.disableServiceAccountKeyCreation`):**
+    Nếu Cloud Shell báo lỗi `HTTPError 412: Request violates constraint 'constraints/iam.disableServiceAccountKeyCreation'`, có nghĩa là tài khoản GCP của bạn cấm tạo khóa cho Service Account. Hãy xử lý theo một trong hai cách dưới đây:
+    
+    *   **Cách A (Khuyên dùng - Chạy lệnh tắt chính sách cấm)**: Nếu bạn có quyền Admin dự án, hãy chạy lệnh sau trên Cloud Shell để tạm tắt chính sách cấm tạo khóa trên dự án này:
+        ```bash
+        gcloud resource-manager org-policies disable-enforce \
+            iam.disableServiceAccountKeyCreation \
+            --project=socialhub-micro-service-1
+        ```
+        *Sau khi chạy lệnh trên thành công, bạn hãy chạy lại lệnh ở Bước 1 để tạo HMAC cho Service Account.*
+
+        *Sau đó lại bật lại chính sách*
+        ```bash
+        gcloud resource-manager org-policies enable-enforce \
+            iam.disableServiceAccountKeyCreation \
+            --project=socialhub-micro-service-1
+        ```
+        *Nếu không bật lại chính sách, dự án của bạn sẽ có rủi ro bảo mật.* 
+
+    *   **Cách B (Tạo thủ công trên Giao diện Web)**: Nếu không dùng lệnh được, bạn có thể tạo khóa trực tiếp từ trình duyệt:
+        1. Truy cập vào trang **Cloud Storage** -> chọn **Settings** (Cài đặt).
+        2. Chọn tab **Interoperability** (Khả năng tương thích).
+        3. Cuộn xuống phần **Access keys for users** (Khóa truy cập cho người dùng) -> click **Create a key** (Tạo khóa) để tạo khóa cho chính tài khoản Gmail của bạn (tài khoản cá nhân không bị chặn bởi chính sách cấm của Service Account).
+        4. Copy cặp `Access Key` và `Secret Key` vừa tạo để sử dụng.
+
+
+3.  **Lấy kết quả và nạp vào Secret**:
+    *   Kết quả trả về khi tạo thành công sẽ có dạng:
+        *   `accessId: GOOGXXXXXX` -> Đây là **`MINIO_ACCESS_KEY`** của bạn.
+        *   `secret: XXXXXX` -> Đây là **`MINIO_SECRET_KEY`** của bạn.
+    *   Mã hóa Base64 hai giá trị này và dán đè vào `MINIO_ACCESS_KEY` và `MINIO_SECRET_KEY` trong file `k8s/secrets.yaml`.
+
+---
 
 ### 5. Thiết lập MongoDB Atlas AWS Free Tier (Lưu trữ dữ liệu vĩnh viễn 0 USD):
 Để dữ liệu MongoDB không bị mất khi bạn hủy cụm GKE (tiết kiệm chi phí khi không code), phương án tối ưu nhất là sử dụng **MongoDB Atlas Free Tier**. Do gói Free Tier chỉ khả dụng trên hạ tầng **AWS**, cụm GKE của bạn tại GCP (`asia-east1`) sẽ kết nối an toàn xuyên đám mây (Cross-Cloud) sang cụm MongoDB Atlas trên AWS thông qua mạng Internet.
