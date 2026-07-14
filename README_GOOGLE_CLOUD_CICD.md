@@ -13,6 +13,15 @@ Chúng ta có **2 phương pháp** chính để thiết lập pipeline. Vui lòn
 
 ---
 
+> ⚠️ **ĐIỀU KIỆN TIÊN QUYẾT BẮT BUỘC (Prerequisites)**:
+> Trước khi thực hiện bất kỳ thiết lập CI/CD nào dưới đây, hãy đảm bảo bạn đã:
+> 1. Khởi tạo thành công cụm GKE Autopilot.
+> 2. Đã nạp thủ công file mật mã **`secrets.yaml`** (chứa mật khẩu PostgreSQL, JWT Secret, và URI MongoDB Atlas thật) lên cụm GKE của bạn. 
+>    *   *Xem hướng dẫn chi tiết cách nạp tại **Bước 5 - Mục 2** của tài liệu [README_GOOGLE_CLOUD_SETUP.md](file:///d:/Hoc_tap_Project_complete/SocialHub_Microservices/README_GOOGLE_CLOUD_SETUP.md#l250).*
+>    *   *Nếu bỏ qua bước nạp Secret này, pipeline deploy sẽ thất bại hoặc các Pod microservices khi chạy lên sẽ bị crash liên tục (CrashLoopBackOff) vì thiếu thông tin xác thực database.*
+
+---
+
 ## 🛠️ CÁCH 1: Google Cloud Build (Tích hợp All-in-GCP)
 
 Phương pháp này sử dụng trực tiếp công cụ Google Cloud Build để lắng nghe sự kiện push code trên GitHub và tự động chạy file [cloudbuild.yaml](file:///d:/Hoc_tap_Project_complete/SocialHub_Microservices/cloudbuild.yaml).

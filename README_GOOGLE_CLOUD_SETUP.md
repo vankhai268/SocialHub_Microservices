@@ -250,6 +250,22 @@ STATUS: RUNNING
 STACK_TYPE: IP..
 ```
 
+### 2. Khởi tạo và nạp Kubernetes Secrets lên cụm GKE (BẮT BUỘC thực hiện một lần):
+Vì file `k8s/secrets.yaml` chứa thông tin nhạy cảm (như mật khẩu Database, khóa JWT, và URI MongoDB Atlas) đã được thêm vào `.gitignore` để tránh bị lộ trên GitHub, **Cloud Build sẽ không thể tự động nạp file này**. Bạn bắt buộc phải thực hiện nạp file Secret này **thủ công một lần duy nhất** trực tiếp từ **Cloud Shell** ngay sau khi khởi tạo cụm GKE thành công ở trên:
+
+1.  Tại máy cá nhân, đảm bảo bạn đã điền các thông tin thật (như mật khẩu PostgreSQL, JWT Secret, và đặc biệt là mã hóa Base64 của `MONGO_URI` MongoDB Atlas) vào file [k8s/secrets.yaml](file:///d:/Hoc_tap_Project_complete/SocialHub_Microservices/k8s/secrets.yaml).
+2.  Mở **Cloud Shell** trên GCP Console.
+3.  Tạo file `secrets.yaml` trên Cloud Shell:
+    ```bash
+    nano secrets.yaml
+    ```
+    *Dán toàn bộ nội dung file `k8s/secrets.yaml` ở local của bạn vào đây, nhấn `Ctrl+O` -> `Enter` để lưu, và `Ctrl+X` để thoát.*
+4.  Chạy lệnh nạp file Secret này lên cụm GKE vừa tạo:
+    ```bash
+    kubectl apply -f secrets.yaml -n default
+    ```
+    *Kubernetes sẽ lưu trữ an toàn Secret này mãi mãi trong cụm. Khi bạn cập nhật hoặc push code qua GitHub CI/CD, các Pod sẽ tự động tìm và kết nối tới Secret này mà không lo bị lộ mật khẩu lên GitHub.*
+
 ---
 
 ## 🤖 Bước 6: Thiết Lập Kho Chứa Docker & Phân Quyền CI/CD (IAM Roles)
