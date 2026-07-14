@@ -158,6 +158,67 @@ gcloud storage buckets create gs://socialhub-media-bucket-1 \
     --uniform-bucket-level-access
 ```
 
+### 5. Thiết lập MongoDB Atlas AWS Free Tier (Lưu trữ dữ liệu vĩnh viễn 0 USD):
+Để dữ liệu MongoDB không bị mất khi bạn hủy cụm GKE (tiết kiệm chi phí khi không code), phương án tối ưu nhất là sử dụng **MongoDB Atlas Free Tier**. Do gói Free Tier chỉ khả dụng trên hạ tầng **AWS**, cụm GKE của bạn tại GCP (`asia-east1`) sẽ kết nối an toàn xuyên đám mây (Cross-Cloud) sang cụm MongoDB Atlas trên AWS thông qua mạng Internet.
+
+#### A. Khởi tạo Database Cluster trên MongoDB Atlas:
+1. Đăng ký hoặc đăng nhập tài khoản tại [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
+2. Tạo một Project mới tên là `SocialHub`.
+3. Click **Create Cluster**, chọn gói **M0 Free (Miễn phí)**.
+4. Chọn Cloud Provider là **Amazon Web Services (AWS)** và chọn Region khả dụng gần nhất (ví dụ: `ap-southeast-1` - Singapore hoặc `ap-east-1` - Hong Kong) để tối ưu hóa độ trễ kết nối.
+5. Chờ 1-3 phút để MongoDB Atlas tạo cụm dữ liệu.
+
+#### B. Tạo tài khoản truy cập Database (Database User):
+1. Chuyển đến menu **Security** -> **Database Access** ở thanh bên trái.
+2. Click **Add New Database User**:
+   *   **Authentication Method**: Password.
+   *   **Username**: `socialhub`
+   *   **Password**: `socialhub_secret` (hoặc mật khẩu tùy chọn của bạn).
+   *   **Database User Privileges**: Chọn `Read and write to any database`.
+3. Click **Add User** để lưu lại.
+
+#### C. Cấu hình Firewall cho phép cụm GKE truy cập (BẮT BUỘC):
+Để cụm GKE kết nối thành công sang MongoDB Atlas (AWS), bạn cần cấu hình tường lửa (IP Whitelist) trên MongoDB Atlas. Do đặc thù môi trường Dev (thường xuyên xóa và tạo lại cụm GKE dẫn đến IP ngoại vi của Cloud NAT bị thay đổi), chúng ta áp dụng chiến lược sau:
+
+*   **👉 Cách 1: Cho phép truy cập từ mọi nơi (`0.0.0.0/0`) (KHUYÊN DÙNG CHO DEV)**:
+    *   **Cách thực hiện**: Trên trang **Network Access** (IP Access List) của MongoDB Atlas -> Click nút **+ ADD IP ADDRESS**:
+        *   **Access List Entry**: Nhập thủ công `0.0.0.0/0`.
+        *   **Comment**: Điền mô tả tùy chọn (ví dụ: `GKE Dev Cluster`).
+        *   **Confirm**: Click nút **Confirm** màu xanh để lưu lại.
+    *   **Tại sao nên dùng?**: Bạn sẽ không bao giờ lo lắng về việc IP của GKE bị thay đổi khi hủy/tái tạo cụm. Kết nối luôn thông suốt.
+    *   **Tính bảo mật**: Vẫn hoàn toàn đảm bảo an toàn vì kết nối được mã hóa TLS/SSL và bảo vệ nghiêm ngặt bằng tài khoản/mật khẩu mạnh (`MONGO_PASSWORD` trong file secret). Đây là cơ chế bảo mật định danh chuẩn tương tự như các dịch vụ Cloud hiện đại (Supabase, Firebase, PlanetScale).
+    *   **Mẹo (Bảo mật tạm thời)**: Ở giao diện mới 2026, bạn có thể gạt công tắc **`This entry is temporary and will be deleted in`** sang bên phải (bật) và chọn thời gian tự động xóa (ví dụ: `6 hours`, `1 day`, `1 week`) để tăng cường độ an toàn tối đa. Hết thời hạn, Atlas sẽ tự động xóa dải IP này.
+
+
+*   **Cách 2: Chỉ cho phép IP tĩnh cụ thể (Chỉ dùng cho Production)**:
+    *   Nếu bạn cấu hình IP tĩnh cho Cloud NAT, bạn chạy lệnh sau trên Cloud Shell để lấy IP:
+        ```bash
+        gcloud compute addresses list --filter="name:socialhub-nat-ip" --format="value(address)"
+        ```
+    *   Điền IP tĩnh lấy được vào phần **Network Access** của Atlas. *(Lưu ý: GCP tính phí thuê IP tĩnh rảnh rỗi khi cụm GKE bị xóa, nên không tối ưu cho mục tiêu tiết kiệm 0 USD khi nghỉ).*
+
+
+#### D. Lấy chuỗi kết nối và quản lý bảo mật (Hạn chế lộ thông tin nhạy cảm):
+1.  Tại giao diện MongoDB Atlas, click **Database** ở menu bên trái -> Click nút **Connect** ở Cluster của bạn.
+2.  Chọn **Drivers**.
+3.  Sao chép chuỗi kết nối (Connection String) và thay thế mật khẩu `<password>` bằng mật khẩu của bạn.
+    *   *Ví dụ: `mongodb+srv://socialhub:socialhub_secret@socialhub.qfpvssq.mongodb.net/?appName=SocialHub`*
+4.  **🔒 Cấu hình bảo mật để đẩy lên GitHub không bị lộ mật khẩu**:
+    *   **Bước 1**: Di chuyển `MONGO_URI` sang file Secret. Hãy chạy lệnh sau trên máy của bạn (hoặc Cloud Shell) để chuyển chuỗi kết nối thành dạng Base64:
+        ```bash
+        echo -n "mongodb+srv://socialhub:your_password@socialhub.xxxx.mongodb.net/?appName=SocialHub" | base64
+        ```
+    *   **Bước 2**: Mở file `k8s/secrets.yaml` và thay thế giá trị Base64 vừa tạo vào khóa `MONGO_URI`:
+        ```yaml
+        MONGO_URI: <DÁN_CHUỖI_BASE64_VÀO_ĐÂY>
+        ```
+    *   **Bước 3**: Đảm bảo tệp `k8s/secrets.yaml` được thêm vào `.gitignore` để không bao giờ bị push lên GitHub.
+    *   **Bước 4 (Deploy thủ công một lần)**: Do file secret bị ẩn khỏi Git, Cloud Build sẽ không có file này khi pull code. Bạn cần mở Cloud Shell và chạy lệnh sau để deploy file secret thủ công một lần duy nhất lên cụm GKE:
+        ```bash
+        kubectl apply -f secrets.yaml -n default
+        ```
+        *(Từ nay về sau, khi bạn push code, Cloud Build chỉ cần apply các file thường, các Pod sẽ tự động đọc cấu hình MONGO_URI từ Secret có sẵn trong cụm).*
+
 ---
 
 ## ☸️ Bước 5: Khởi Tạo Cụm GKE Autopilot (Google Kubernetes Engine)

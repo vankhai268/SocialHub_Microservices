@@ -17,7 +17,7 @@ data:
   NOTIFICATION_SERVICE_URL: "http://notification-service:5000"
 
   # --- Database & Redis Hosts (Hãy cập nhật IP Private của GCP Cloud SQL và Memorystore) ---
-  PG_HOST: "10.128.0.2" # Thay thế bằng IP Private của Cloud SQL của bạn
+  PG_HOST: "10.128.0.6"
   PG_PORT: "5432"
   PG_USER: "socialhub"
   PG_DATABASE_USER: "socialhub_user"
@@ -28,8 +28,7 @@ data:
   REDIS_PORT: "6379"
   REDIS_URL: "redis://redis:6379"
   
-  # --- MongoDB Atlas Connection ---
-  MONGO_URI: "mongodb+srv://socialhub:socialhub_secret@cluster.mongodb.net/socialhub?retryWrites=true&w=majority" # Thay thế bằng MongoDB Atlas URI của bạn
+
 
   # --- RabbitMQ Configuration ---
   RABBITMQ_URL: "amqp://socialhub:socialhub_secret@rabbitmq:5672"

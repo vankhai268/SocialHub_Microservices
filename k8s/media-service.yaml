@@ -39,8 +39,8 @@ spec:
           value: "5000"
         - name: MONGO_URI
           valueFrom:
-            configMapKeyRef:
-              name: socialhub-config
+            secretKeyRef:
+              name: socialhub-secrets
               key: MONGO_URI
         - name: JWT_SECRET
           valueFrom:
