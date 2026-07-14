@@ -109,3 +109,8 @@ coverage/
 .pytest_cache/
 htmlcov/
 test-results/
+
+# ==============================
+# Kubernetes Secrets (Bảo mật thông tin nhạy cảm)
+# ==============================
+k8s/secrets.yaml
