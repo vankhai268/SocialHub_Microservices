@@ -158,6 +158,22 @@ gcloud storage buckets create gs://socialhub-media-bucket-1 \
     --uniform-bucket-level-access
 ```
 
+#### Tạo HMAC Access Key & Secret Key để kết nối (Tương thích S3 API):
+Vì `media-service` kết nối với GCS thông qua giao thức S3 (MinIO client), bạn cần tạo khóa xác thực HMAC cho Service Account để lấy **Access Key** và **Secret Key**:
+1.  Chạy lệnh sau trên Cloud Shell để tạo HMAC key cho tài khoản Compute Engine mặc định (tài khoản chạy GKE):
+    ```bash
+    PROJECT_NUM=$(gcloud projects describe socialhub-micro-service-1 --format="value(projectNumber)")
+    
+    gcloud storage hmac create \
+        --service-account=${PROJECT_NUM}-compute@developer.gserviceaccount.com
+    ```
+2.  Kết quả trả về sẽ có dạng:
+    *   `accessId: GOOGXXXXXX` -> Đây là **`MINIO_ACCESS_KEY`** của bạn.
+    *   `secret: XXXXXX` -> Đây là **`MINIO_SECRET_KEY`** của bạn.
+3.  Mã hóa Base64 hai giá trị này và dán đè vào `MINIO_ACCESS_KEY` và `MINIO_SECRET_KEY` trong file `k8s/secrets.yaml`.
+
+---
+
 ### 5. Thiết lập MongoDB Atlas AWS Free Tier (Lưu trữ dữ liệu vĩnh viễn 0 USD):
 Để dữ liệu MongoDB không bị mất khi bạn hủy cụm GKE (tiết kiệm chi phí khi không code), phương án tối ưu nhất là sử dụng **MongoDB Atlas Free Tier**. Do gói Free Tier chỉ khả dụng trên hạ tầng **AWS**, cụm GKE của bạn tại GCP (`asia-east1`) sẽ kết nối an toàn xuyên đám mây (Cross-Cloud) sang cụm MongoDB Atlas trên AWS thông qua mạng Internet.
 
