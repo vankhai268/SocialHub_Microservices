@@ -24,9 +24,9 @@ data:
   PG_DATABASE_FRIEND: "socialhub_friend"
   PG_DATABASE_POST: "socialhub_post"
   
-  REDIS_HOST: "10.0.0.3" # Thay thế bằng IP Private của Memorystore Redis của bạn
+  REDIS_HOST: "redis" # Sử dụng DNS nội bộ của Service Redis chạy trong GKE
   REDIS_PORT: "6379"
-  REDIS_URL: "redis://10.0.0.3:6379" # Thay thế bằng IP Private tương ứng
+  REDIS_URL: "redis://redis:6379"
   
   # --- MongoDB Atlas Connection ---
   MONGO_URI: "mongodb+srv://socialhub:socialhub_secret@cluster.mongodb.net/socialhub?retryWrites=true&w=majority" # Thay thế bằng MongoDB Atlas URI của bạn

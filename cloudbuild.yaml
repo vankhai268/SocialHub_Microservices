@@ -3,6 +3,16 @@ steps:
   # BUILD & PUSH DOCKER IMAGES (Chạy song song nhờ waitFor: ['-'])
   # ─────────────────────────────────────────────────────────────────────────
 
+  # [Tùy chọn Frontend - Bỏ comment nếu muốn deploy frontend lên GKE]
+  # - name: 'gcr.io/cloud-builders/docker'
+  #   id: 'build-frontend'
+  #   waitFor: ['-']
+  #   args: ['build', '-t', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/frontend:$COMMIT_SHA', './frontend']
+  # - name: 'gcr.io/cloud-builders/docker'
+  #   id: 'push-frontend'
+  #   waitFor: ['build-frontend']
+  #   args: ['push', 'asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/frontend:$COMMIT_SHA']
+
   # 1. API Gateway
   - name: 'gcr.io/cloud-builders/docker'
     id: 'build-gateway'
@@ -87,6 +97,7 @@ steps:
       - 'push-media'
       - 'push-notification'
       - 'push-chat'
+      # - 'push-frontend' # Bỏ comment nếu bật deploy frontend lên GKE
     entrypoint: 'bash'
     args:
       - '-c'
@@ -95,6 +106,7 @@ steps:
         gcloud container clusters get-credentials socialhub-gke-cluster --region=asia-east1
 
         echo "=== THAY THẾ IMAGE TAGS TRONG KUBERNETES MANIFESTS ==="
+        # sed -i 's|IMAGE_PLACEHOLDER_FRONTEND|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/frontend:$COMMIT_SHA|g' k8s/frontend.yaml
         sed -i 's|IMAGE_PLACEHOLDER_GATEWAY|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/gateway:$COMMIT_SHA|g' k8s/gateway.yaml
         sed -i 's|IMAGE_PLACEHOLDER_USER_SERVICE|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/user-service:$COMMIT_SHA|g' k8s/user-service.yaml
         sed -i 's|IMAGE_PLACEHOLDER_FRIEND_SERVICE|asia-east1-docker.pkg.dev/$PROJECT_ID/socialhub-repo/friend-service:$COMMIT_SHA|g' k8s/friend-service.yaml

@@ -134,7 +134,13 @@ STATUS: RUNNABLE
 
 
 ### 3. Tạo Google Cloud Memorystore for Redis (Tối ưu chi phí cho Dev):
-Khởi tạo Redis với gói `BASIC` (đơn vùng) và dung lượng tối thiểu `1GB` để tiết kiệm chi phí (mặc định không có replication):
+
+> 💡 **KHUYÊN DÙNG CHO DEV (TIẾT KIỆM CHI PHÍ - 0 USD)**:
+> Bạn **KHÔNG CẦN** chạy lệnh `gcloud` tạo Memorystore Redis dưới đây. Vì Memorystore Redis có giá khá đắt (khoảng $15-30/tháng) và không hỗ trợ tạm dừng (Stop) khi không code.
+> 
+> Thay vào đó, chúng ta sẽ chạy Redis trực tiếp dưới dạng một **Pod bên trong cụm GKE** bằng file cấu hình [k8s/redis.yaml](file:///d:/Hoc_tap_Project_complete/SocialHub_Microservices/k8s/redis.yaml) (được định cấu hình chạy trên Spot VM siêu rẻ, tự động tắt khi cụm dừng). File [k8s/configmap.yaml](file:///d:/Hoc_tap_Project_complete/SocialHub_Microservices/k8s/configmap.yaml) đã được cấu hình trỏ kết nối mặc định vào Redis nội bộ này.
+
+Nếu bạn vẫn muốn khởi tạo dịch vụ Managed Memorystore for Redis của Google Cloud, hãy chạy lệnh sau:
 ```bash
 gcloud redis instances create socialhub-redis \
     --tier=BASIC \
@@ -143,6 +149,7 @@ gcloud redis instances create socialhub-redis \
     --network=socialhub-vpc \
     --connect-mode=private-service-access
 ```
+*(Lưu ý: Nếu dùng cách này, bạn cần lấy IP Private của Memorystore sau khi tạo xong và cập nhật lại trường `REDIS_HOST` và `REDIS_URL` trong file `k8s/configmap.yaml`)*
 
 ### 4. Tạo Google Cloud Storage Bucket (Thay thế MinIO):
 ```bash
