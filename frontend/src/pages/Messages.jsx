@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import api from "../services/api";
@@ -11,7 +12,10 @@ import {
     X,
     Loader,
     MessageSquarePlus,
-    Circle
+    Circle,
+    Trash2,
+    UserPlus,
+    UserMinus
 } from "lucide-react";
 
 // Component con tải Ảnh & Video an toàn bằng blob đính kèm JWT Token (Không có viền lót tím)
@@ -81,13 +85,230 @@ const ChatMedia = ({ mediaId }) => {
     );
 };
 
+// Component con quản lý thành viên nhóm chat
+const GroupMembersModal = ({ conversation, onClose, onGroupUpdated, friends }) => {
+    const { user: currentUser } = useAuth();
+    const [isAdding, setIsAdding] = useState(false);
+    const [isRemoving, setIsRemoving] = useState(false);
+    const groupId = conversation.groupRef?._id || conversation.groupRef?.id;
+    const currentMembers = conversation.groupRef?.members || [];
+    const currentMemberIds = new Set(currentMembers.map(m => m.userId));
+
+    // Xác định vai trò của user hiện tại
+    const currentUserMember = currentMembers.find(m => m.userId === currentUser?.id);
+    const isCurrentUserAdmin = currentUserMember?.role === "admin";
+
+    // Lọc danh sách bạn bè chưa có trong nhóm
+    const addableFriends = friends.filter(f => !currentMemberIds.has(f.id));
+
+    const handleAddMember = async (friendId) => {
+        if (!groupId) return;
+        setIsAdding(true);
+        try {
+            const res = await api.post(`/groups/${groupId}/members`, { userId: friendId });
+            if (res.data && res.data.success) {
+                onGroupUpdated(res.data.data);
+                alert("Đã thêm thành viên thành công!");
+            }
+        } catch (err) {
+            console.error("❌ Lỗi thêm thành viên vào nhóm:", err);
+            alert(err.response?.data?.message || "Không thể thêm thành viên!");
+        } finally {
+            setIsAdding(false);
+        }
+    };
+
+    const handleRemoveMember = async (memberId) => {
+        const confirmRemove = window.confirm("Bạn có chắc chắn muốn mời thành viên này rời khỏi nhóm?");
+        if (!confirmRemove) return;
+
+        setIsRemoving(true);
+        try {
+            const res = await api.delete(`/groups/${groupId}/members/${memberId}`);
+            if (res.data && res.data.success) {
+                // API DELETE trả về { status, group }
+                onGroupUpdated(res.data.data.group);
+                alert("Đã xóa thành viên khỏi nhóm.");
+            }
+        } catch (err) {
+            console.error("❌ Lỗi xóa thành viên khỏi nhóm:", err);
+            alert(err.response?.data?.message || "Không thể xóa thành viên!");
+        } finally {
+            setIsRemoving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fadeIn">
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
+                    <h3 className="font-bold text-slate-800 text-sm">Quản lý thành viên nhóm</h3>
+                    <button
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-slate-700 transition cursor-pointer p-1 rounded-lg hover:bg-slate-200"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="p-5 space-y-5">
+                    {/* Danh sách thành viên hiện tại */}
+                    <div>
+                        <h4 className="text-[10px] text-slate-550 font-bold uppercase tracking-wider mb-2">
+                            Thành viên hiện tại ({currentMembers.length})
+                        </h4>
+                        <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                            {currentMembers.map((member) => (
+                                <div key={member.userId} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl transition">
+                                    <div className="flex items-center space-x-2.5">
+                                        <img
+                                            src={member.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${member.userId}`}
+                                            className="w-7 h-7 rounded-full object-cover border border-slate-200"
+                                            alt="Avatar"
+                                        />
+                                        <span className="text-xs font-semibold text-slate-800">{member.displayName}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                            member.role === "admin" ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-slate-100 text-slate-600"
+                                        }`}>
+                                            {member.role === "admin" ? "Trưởng nhóm" : "Thành viên"}
+                                        </span>
+                                        {/* Chỉ Trưởng nhóm (Admin) mới có quyền xóa thành viên khác */}
+                                        {isCurrentUserAdmin && member.userId !== currentUser?.id && (
+                                            <button
+                                                disabled={isRemoving}
+                                                onClick={() => handleRemoveMember(member.userId)}
+                                                title="Mới ra khỏi nhóm"
+                                                className="p-1 hover:bg-rose-50 text-slate-450 hover:text-rose-600 rounded-lg transition disabled:opacity-50 cursor-pointer"
+                                            >
+                                                <UserMinus className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Thêm thành viên mới */}
+                    <div className="border-t border-slate-100 pt-4">
+                        <h4 className="text-[10px] text-slate-550 font-bold uppercase tracking-wider mb-2">
+                            Thêm thành viên mới
+                        </h4>
+                        {addableFriends.length > 0 ? (
+                            <div className="max-h-44 overflow-y-auto space-y-2 pr-1">
+                                {addableFriends.map((friend) => (
+                                    <div key={friend.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl transition">
+                                        <div className="flex items-center space-x-2.5">
+                                            <img
+                                                src={friend.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${friend.id}`}
+                                                className="w-7 h-7 rounded-full object-cover border border-slate-200"
+                                                alt="Avatar"
+                                            />
+                                            <span className="text-xs font-semibold text-slate-800">{friend.displayName}</span>
+                                        </div>
+                                        <button
+                                            disabled={isAdding}
+                                            onClick={() => handleAddMember(friend.id)}
+                                            className="flex items-center space-x-1 px-3 py-1.5 bg-violet-600 hover:bg-violet-750 text-white rounded-lg text-[10px] font-bold transition disabled:opacity-50 cursor-pointer"
+                                        >
+                                            <UserPlus className="w-3.5 h-3.5" />
+                                            <span>Thêm</span>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-[10px] text-slate-400 italic text-center py-4">Tất cả bạn bè đã tham gia nhóm này.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Component hiển thị tin nhắn chia sẻ bài viết đẹp mắt tương tự Facebook
+const RenderShareMessage = ({ msgContent, isMe, onNavigate }) => {
+    let data = null;
+    try {
+        data = JSON.parse(msgContent);
+    } catch (e) {
+        return <div className="text-xs italic text-slate-400">Tin nhắn chia sẻ (Không tải được nội dung)</div>;
+    }
+
+    return (
+        <div className={`flex flex-col space-y-1.5 max-w-[280px] ${isMe ? "items-end" : "items-start"}`}>
+            {/* Lời dẫn đi kèm (nếu có) */}
+            {data.shareText && (
+                <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                    isMe ? "bg-violet-600 text-white rounded-br-none" : "bg-white text-slate-800 rounded-bl-none border border-slate-200"
+                }`}>
+                    {data.shareText}
+                </div>
+            )}
+            
+            {/* Block bài viết chia sẻ kiểu Facebook */}
+            <div
+                onClick={() => onNavigate(`/post/${data.postId}`)}
+                className="bg-slate-50 border border-slate-200 hover:border-violet-450 hover:bg-slate-100 rounded-2xl overflow-hidden shadow-sm cursor-pointer transition duration-200 text-left w-full max-w-[260px] flex flex-col"
+            >
+                {/* Phần hình ảnh ở trên */}
+                {data.mediaId ? (
+                    <div className="w-full h-36 overflow-hidden bg-black/5 flex items-center justify-center border-b border-slate-200/60 relative shrink-0">
+                        <ChatMedia mediaId={data.mediaId} />
+                        <div className="absolute top-2 left-2 flex items-center space-x-1.5 bg-black/40 backdrop-blur-sm px-2.5 py-0.5 rounded-full border border-white/10 max-w-[90%] select-none">
+                            <img
+                                src={data.authorAvatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.postId}`}
+                                className="w-4 h-4 rounded-full object-cover border border-white/20"
+                                alt="Author"
+                            />
+                            <span className="font-bold text-[9px] text-white truncate">{data.authorName}</span>
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* Phần nội dung text và logo ở dưới */}
+                <div className="p-3.5 space-y-2">
+                    {!data.mediaId && (
+                        <div className="flex items-center space-x-2 border-b border-slate-200/60 pb-1.5">
+                            <img
+                                src={data.authorAvatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.postId}`}
+                                className="w-5.5 h-5.5 rounded-full object-cover border border-slate-200"
+                                alt="Author"
+                            />
+                            <span className="font-bold text-[11px] text-slate-800 truncate">{data.authorName}</span>
+                        </div>
+                    )}
+                    
+                    <p className="text-[10px] font-bold text-slate-800 line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                        {data.postContent || "Bài viết không có nội dung văn bản."}
+                    </p>
+
+                    {/* Logo SocialHub chân trang tương tự Facebook */}
+                    <div className="flex items-center space-x-1 text-[9px] text-slate-500 font-semibold pt-2 border-t border-slate-200/50 mt-1 select-none">
+                        <div className="w-3.5 h-3.5 rounded-full bg-violet-600 flex items-center justify-center text-white font-extrabold text-[8px]">
+                            S
+                        </div>
+                        <span>SocialHub</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const Messages = () => {
     const { user: currentUser } = useAuth();
+    const navigate = useNavigate();
     const { onlineUsers, chatSocket } = useSocket();
     
     const [conversations, setConversations] = useState([]);
     const [selectedConv, setSelectedConv] = useState(null);
     const [messages, setMessages] = useState([]);
+    const [showMembersModal, setShowMembersModal] = useState(false);
     const [inputText, setInputText] = useState("");
     
     const [isLoadingConvs, setIsLoadingConvs] = useState(true);
@@ -137,20 +358,38 @@ const Messages = () => {
         const handleNewMessage = (msg) => {
             if (selectedConv) {
                 const cId = selectedConv._id || selectedConv.id;
-                if (msg.conversationId === cId) {
+                if (String(msg.conversationId) === String(cId)) {
                     setMessages((prev) => [...prev, msg]);
                 }
             }
             fetchConversations();
         };
 
-        chatSocket.on("message:new", handleNewMessage);
+        chatSocket.on("message:received", handleNewMessage);
         return () => {
-            chatSocket.off("message:new", handleNewMessage);
+            chatSocket.off("message:received", handleNewMessage);
         };
     }, [chatSocket, selectedConv]);
 
-    // 3. Khi chọn 1 cuộc hội thoại -> Tải danh sách tin nhắn
+    // 2b. Join Room conversation socket khi thay đổi cuộc hội thoại được chọn
+    useEffect(() => {
+        if (!chatSocket || !selectedConv) return;
+        const cId = selectedConv._id || selectedConv.id;
+
+        const joinRoom = () => {
+            chatSocket.emit("conversation:join", { conversationId: cId });
+            console.log(`📡 [Messages page] Đã gửi yêu cầu join conversation room: ${cId}`);
+        };
+
+        joinRoom();
+        chatSocket.on("connect", joinRoom);
+
+        return () => {
+            chatSocket.off("connect", joinRoom);
+        };
+    }, [chatSocket, selectedConv]);
+
+    // 3. Khi chọn 1 cuộc hội thoại -> Tải danh sách tin nhắn lịch sử
     useEffect(() => {
         if (!selectedConv) return;
         const cId = selectedConv._id || selectedConv.id;
@@ -160,7 +399,7 @@ const Messages = () => {
             try {
                 const res = await api.get(`/conversations/${cId}/messages`);
                 if (res.data && res.data.success) {
-                    setMessages(res.data.data || []);
+                    setMessages(res.data.data?.data ? [...res.data.data.data].reverse() : []);
                 }
             } catch (err) {
                 console.error("❌ Lỗi tải lịch sử tin nhắn:", err.message);
@@ -196,10 +435,34 @@ const Messages = () => {
         });
     };
 
-    // 4. Gửi tin nhắn (Văn bản và/hoặc nhiều Ảnh/Video)
+    // 3b. Dán ảnh trực tiếp từ clipboard
+    const handleInputPaste = (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") !== -1) {
+                const blob = items[i].getAsFile();
+                if (blob) {
+                    const previewUrl = URL.createObjectURL(blob);
+                    const fileItem = {
+                        id: Math.random().toString(36).substring(2, 9),
+                        file: blob,
+                        previewUrl: previewUrl,
+                        isVideo: false
+                    };
+                    setSelectedFiles((prev) => [...prev, fileItem]);
+                    e.preventDefault(); // Ngăn hiển thị text nhị phân linh tinh
+                    break;
+                }
+            }
+        }
+    };
+
+    // 4. Gửi tin nhắn (Văn bản và/hoặc nhiều Ảnh/Video) qua Socket
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!selectedConv) return;
+        if (!selectedConv || !chatSocket) return;
         if (!inputText.trim() && selectedFiles.length === 0) return;
 
         const cId = selectedConv._id || selectedConv.id;
@@ -222,21 +485,23 @@ const Messages = () => {
                 uploadedMediaIds = resIds.filter(Boolean);
             }
 
-            // Gửi từng media kèm theo hoặc tin nhắn tổng thể
+            // Gửi từng media kèm theo hoặc tin nhắn tổng thể qua WebSocket event message:send
             if (uploadedMediaIds.length > 0) {
                 for (let i = 0; i < uploadedMediaIds.length; i++) {
                     const mId = uploadedMediaIds[i];
                     const isLast = i === uploadedMediaIds.length - 1;
                     const contentText = isLast && inputText.trim() ? inputText.trim() : "Sent an image";
 
-                    await api.post(`/conversations/${cId}/messages`, {
+                    chatSocket.emit("message:send", {
+                        conversationId: cId,
                         content: contentText,
                         type: "image",
                         mediaId: mId
                     });
                 }
             } else if (inputText.trim()) {
-                await api.post(`/conversations/${cId}/messages`, {
+                chatSocket.emit("message:send", {
+                    conversationId: cId,
                     content: inputText.trim(),
                     type: "text"
                 });
@@ -246,13 +511,6 @@ const Messages = () => {
             setInputText("");
             selectedFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl));
             setSelectedFiles([]);
-
-            // Refetch messages & conversations
-            const res = await api.get(`/conversations/${cId}/messages`);
-            if (res.data && res.data.success) {
-                setMessages(res.data.data || []);
-            }
-            fetchConversations();
         } catch (err) {
             console.error("❌ Lỗi gửi tin nhắn:", err.message);
             alert("Không thể gửi tin nhắn. Vui lòng thử lại!");
@@ -262,8 +520,7 @@ const Messages = () => {
     };
 
     // 5. Tải danh sách bạn bè để chọn làm nhóm
-    const handleOpenGroupModal = async () => {
-        setShowGroupModal(true);
+    const fetchFriends = async () => {
         try {
             const res = await api.get("/friends");
             if (res.data && res.data.success) {
@@ -274,10 +531,41 @@ const Messages = () => {
         }
     };
 
+    const handleOpenGroupModal = () => {
+        setShowGroupModal(true);
+        fetchFriends();
+    };
+
+    const handleOpenMembersModal = () => {
+        setShowMembersModal(true);
+        fetchFriends();
+    };
+
     const toggleSelectFriend = (friendId) => {
         setSelectedFriends((prev) =>
             prev.includes(friendId) ? prev.filter((id) => id !== friendId) : [...prev, friendId]
         );
+    };
+
+    // 5b. Xóa cuộc trò chuyện
+    const handleDeleteConversation = async (e, convId) => {
+        e.stopPropagation();
+        const confirmDelete = window.confirm("Bạn có chắc chắn muốn xóa cuộc trò chuyện này? Mọi tin nhắn sẽ bị xóa vĩnh viễn và không thể khôi phục.");
+        if (!confirmDelete) return;
+
+        try {
+            const res = await api.delete(`/conversations/${convId}`);
+            if (res.data && res.data.success) {
+                setConversations(prev => prev.filter(c => (c._id || c.id) !== convId));
+                if (selectedConv && (selectedConv._id === convId || selectedConv.id === convId)) {
+                    setSelectedConv(null);
+                    setMessages([]);
+                }
+            }
+        } catch (err) {
+            console.error("❌ Lỗi xóa cuộc trò chuyện:", err.message);
+            alert("Không thể xóa cuộc trò chuyện!");
+        }
     };
 
     // 6. Tạo nhóm chat mới
@@ -381,11 +669,18 @@ const Messages = () => {
                                             <h4 className="text-xs font-bold text-slate-800 truncate group-hover:text-violet-600 transition">
                                                 {title}
                                             </h4>
-                                            {conv.unreadCount > 0 && (
-                                                <span className="bg-rose-500 text-white font-bold text-[9px] px-1.5 py-0.5 rounded-full shadow-md shadow-rose-500/20 min-w-[16px] text-center">
+                                            {conv.unreadCount > 0 ? (
+                                                <span className="bg-rose-500 text-white font-bold text-[9px] px-1.5 py-0.5 rounded-full shadow-md shadow-rose-500/20 min-w-[16px] text-center group-hover:hidden animate-pulse">
                                                     {conv.unreadCount}
                                                 </span>
-                                            )}
+                                            ) : null}
+                                            <button
+                                                onClick={(e) => handleDeleteConversation(e, cId)}
+                                                title="Xóa hội thoại"
+                                                className="hidden group-hover:flex items-center justify-center p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition shrink-0 cursor-pointer"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                         </div>
                                         <p className="text-[10px] text-slate-500 mt-1 truncate">
                                             {conv.lastMessage?.content || (conv.lastMessage?.type === "image" ? "Đã gửi tệp media" : "Chưa có tin nhắn...")}
@@ -428,6 +723,16 @@ const Messages = () => {
                                             </p>
                                         </div>
                                     </div>
+
+                                    {isGroup && (
+                                        <button
+                                            onClick={handleOpenMembersModal}
+                                            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-650 hover:text-violet-600 rounded-xl text-xs font-semibold cursor-pointer transition shadow-sm"
+                                        >
+                                            <Users className="w-4 h-4" />
+                                            <span>Thành viên</span>
+                                        </button>
+                                    )}
                                 </div>
                             );
                         })()}
@@ -482,6 +787,8 @@ const Messages = () => {
                                                             </div>
                                                         )}
                                                     </div>
+                                                ) : msg.type === "share" ? (
+                                                    <RenderShareMessage msgContent={msg.content} isMe={isMe} onNavigate={navigate} />
                                                 ) : (
                                                     <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
                                                         isMe
@@ -552,6 +859,7 @@ const Messages = () => {
                                     type="text"
                                     value={inputText}
                                     onChange={(e) => setInputText(e.target.value)}
+                                    onPaste={handleInputPaste}
                                     placeholder="Nhập tin nhắn..."
                                     className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-600 transition"
                                 />
@@ -655,6 +963,40 @@ const Messages = () => {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Modal quản lý thành viên nhóm */}
+            {showMembersModal && selectedConv && (
+                <GroupMembersModal
+                    conversation={selectedConv}
+                    onClose={() => setShowMembersModal(false)}
+                    friends={friends}
+                    onGroupUpdated={(updatedGroup) => {
+                        setSelectedConv(prev => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                groupRef: {
+                                    ...prev.groupRef,
+                                    members: updatedGroup.members
+                                },
+                                participants: updatedGroup.members.map(m => ({ userId: m.userId, joinedAt: m.joinedAt }))
+                            };
+                        });
+                        // Cập nhật lại conversations list
+                        setConversations(prev => prev.map(c => {
+                            const cId = c._id || c.id;
+                            const targetId = selectedConv._id || selectedConv.id;
+                            if (cId === targetId) {
+                                return {
+                                    ...c,
+                                    participants: updatedGroup.members.map(m => ({ userId: m.userId, joinedAt: m.joinedAt }))
+                                };
+                            }
+                            return c;
+                        }));
+                    }}
+                />
             )}
         </div>
     );

@@ -18,7 +18,8 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
 
     // Trạng thái cho bài đăng được chia sẻ
     const [originalPost, setOriginalPost] = useState(null);
-    const [originalImageUrl, setOriginalImageUrl] = useState("");
+    const [originalMediaItems, setOriginalMediaItems] = useState([]);
+    const [isLoadingOriginalMedia, setIsLoadingOriginalMedia] = useState(false);
     const [isLoadingOriginal, setIsLoadingOriginal] = useState(false);
 
     // Trạng thái cho Bình luận
@@ -171,16 +172,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                 try {
                     const res = await api.get(`/posts/${post.original_post_id}`);
                     if (res.data && res.data.success) {
-                        const origPostObj = res.data.data;
-                        setOriginalPost(origPostObj);
-
-                        // Nếu bài gốc có ảnh đính kèm, tiếp tục phân giải link ảnh
-                        if (origPostObj.media_ids && origPostObj.media_ids.length > 0) {
-                            const imgRes = await api.get(`/media/${origPostObj.media_ids[0]}/url`);
-                            if (imgRes.data && imgRes.data.url) {
-                                setOriginalImageUrl(imgRes.data.url);
-                            }
-                        }
+                        setOriginalPost(res.data.data);
                     }
                 } catch (error) {
                     console.error("❌ Lỗi lấy thông tin bài đăng gốc:", error.message);
@@ -191,6 +183,42 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
         };
         fetchOriginalPost();
     }, [post.is_shared, post.original_post_id]);
+
+    // 2b. Tải tất cả Media (Ảnh & Video) của bài viết gốc
+    useEffect(() => {
+        let createdObjectUrls = [];
+        const fetchOriginalMedia = async () => {
+            if (originalPost && originalPost.media_ids && originalPost.media_ids.length > 0) {
+                setIsLoadingOriginalMedia(true);
+                try {
+                    const promises = originalPost.media_ids.map(async (mId) => {
+                        try {
+                            const res = await api.get(`/media/file/${mId}`, { responseType: "blob" });
+                            const objUrl = URL.createObjectURL(res.data);
+                            createdObjectUrls.push(objUrl);
+                            const type = res.data.type || "";
+                            return { id: mId, url: objUrl, isVideo: type.startsWith("video/") };
+                        } catch (err) {
+                            return null;
+                        }
+                    });
+                    const results = await Promise.all(promises);
+                    setOriginalMediaItems(results.filter(Boolean));
+                } catch (error) {
+                    console.error("❌ Lỗi lấy media bài viết gốc:", error.message);
+                } finally {
+                    setIsLoadingOriginalMedia(false);
+                }
+            } else {
+                setOriginalMediaItems([]);
+            }
+        };
+        fetchOriginalMedia();
+
+        return () => {
+            createdObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+        };
+    }, [originalPost]);
 
     // 3. Tải danh sách bình luận khi mở khung accordion
     useEffect(() => {
@@ -416,10 +444,30 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                             </div>
                             {/* Nội dung chữ bài gốc */}
                             <p className="text-slate-600 text-xs leading-relaxed whitespace-pre-wrap">{originalPost.content}</p>
-                            {/* Ảnh đính kèm bài gốc */}
-                            {originalImageUrl && (
-                                <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 max-w-md flex justify-center mt-2">
-                                    <img src={originalImageUrl} className="w-full max-h-48 object-contain" alt="Original Attachment" />
+                            {/* Các tệp Media đính kèm bài gốc */}
+                            {originalMediaItems.length > 0 && (
+                                <div className={`grid gap-1.5 rounded-xl overflow-hidden border border-slate-200 mt-2 bg-slate-50 max-w-lg ${
+                                    originalMediaItems.length === 1 ? "grid-cols-1" : "grid-cols-2"
+                                }`}>
+                                    {originalMediaItems.map((item) => (
+                                        <div key={item.id} className="relative overflow-hidden flex items-center justify-center bg-black/5 rounded-lg max-h-48">
+                                            {item.isVideo ? (
+                                                <video src={item.url} controls className="w-full max-h-48 object-cover rounded-lg" />
+                                            ) : (
+                                                <img
+                                                    src={item.url}
+                                                    alt="Original Attachment"
+                                                    className="w-full max-h-48 object-cover hover:opacity-95 transition cursor-pointer"
+                                                    onClick={() => window.open(item.url, "_blank")}
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {isLoadingOriginalMedia && (
+                                <div className="h-24 bg-slate-50 animate-pulse rounded-xl flex items-center justify-center text-[10px] text-slate-400 mt-2">
+                                    Đang tải đa phương tiện bài gốc...
                                 </div>
                             )}
                         </>

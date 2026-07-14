@@ -1,18 +1,179 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import api from "../services/api";
 import PostCard from "../components/PostCard";
 import { useAuth } from "../context/AuthContext";
-import { Loader, Calendar, Mail, FileText, UserPlus, UserCheck, UserMinus, MessageSquare } from "lucide-react";
+import { Loader, Calendar, Mail, FileText, UserPlus, UserCheck, UserMinus, MessageSquare, Edit3, Camera, Save, X } from "lucide-react";
+
+// Modal chỉnh sửa profile
+const EditProfileModal = ({ profileUser, onClose, onProfileUpdated }) => {
+    const [displayName, setDisplayName] = useState(profileUser.displayName || "");
+    const [bio, setBio] = useState(profileUser.bio || "");
+    const [avatarFile, setAvatarFile] = useState(null);
+    const [avatarPreview, setAvatarPreview] = useState(profileUser.avatarUrl || "");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef(null);
+
+    const handleAvatarChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setAvatarFile(file);
+            setAvatarPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!displayName.trim()) {
+            alert("Tên hiển thị không được để trống!");
+            return;
+        }
+
+        setIsSubmitting(true);
+        let uploadedAvatarUrl = profileUser.avatarUrl;
+
+        try {
+            // 1. Tải lên avatar mới nếu được chọn
+            if (avatarFile) {
+                setIsUploading(true);
+                const formData = new FormData();
+                formData.append("file", avatarFile);
+                const uploadRes = await api.post("/media/upload", formData, {
+                    headers: { "Content-Type": "multipart/form-data" }
+                });
+                
+                if (uploadRes.data && uploadRes.data.id) {
+                    const apiBase = api.defaults.baseURL || "http://localhost:8080/api";
+                    uploadedAvatarUrl = `${apiBase}/media/file/${uploadRes.data.id}`;
+                }
+                setIsUploading(false);
+            }
+
+            // 2. Cập nhật profile người dùng qua user-service
+            const updateRes = await api.put(`/users/${profileUser.id}`, {
+                name: displayName.trim(),
+                bio: bio.trim(),
+                avatarUrl: uploadedAvatarUrl
+            });
+
+            if (updateRes.data && updateRes.data.success) {
+                onProfileUpdated(updateRes.data.user);
+                onClose();
+            }
+        } catch (error) {
+            console.error("❌ Lỗi khi cập nhật trang cá nhân:", error);
+            alert(error.response?.data?.message || "Không thể cập nhật trang cá nhân. Vui lòng thử lại!");
+        } finally {
+            setIsSubmitting(false);
+            setIsUploading(false);
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (avatarFile && avatarPreview.startsWith("blob:")) {
+                URL.revokeObjectURL(avatarPreview);
+            }
+        };
+    }, [avatarFile, avatarPreview]);
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fadeIn">
+                <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
+                    <h3 className="font-bold text-slate-800 text-sm">Chỉnh sửa trang cá nhân</h3>
+                    <button
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-slate-700 transition cursor-pointer p-1 rounded-lg hover:bg-slate-200"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    <div className="flex flex-col items-center space-y-2">
+                        <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                            <img
+                                src={avatarPreview || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                                alt="Avatar Preview"
+                                className="w-24 h-24 rounded-full object-cover border-2 border-violet-500/50 shadow-md group-hover:opacity-85 transition"
+                            />
+                            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                <Camera className="w-6 h-6 text-white" />
+                            </div>
+                        </div>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileInputRef}
+                            onChange={handleAvatarChange}
+                            className="hidden"
+                        />
+                        <span className="text-[10px] text-slate-500 font-semibold uppercase">Nhấp để đổi ảnh đại diện</span>
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="block text-[10px] text-slate-500 font-semibold uppercase">Họ và tên</label>
+                        <input
+                            type="text"
+                            value={displayName}
+                            onChange={(e) => setDisplayName(e.target.value)}
+                            placeholder="Nhập tên hiển thị..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-violet-600 transition"
+                            required
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="block text-[10px] text-slate-500 font-semibold uppercase">Tiểu sử (Bio)</label>
+                        <textarea
+                            value={bio}
+                            onChange={(e) => setBio(e.target.value)}
+                            placeholder="Giới thiệu ngắn về bản thân..."
+                            rows={3}
+                            maxLength={200}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-violet-600 transition resize-none"
+                        />
+                        <span className="block text-[9px] text-right text-slate-400">{bio.length}/200 ký tự</span>
+                    </div>
+
+                    <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-5 py-2 text-slate-650 hover:bg-slate-100 rounded-xl transition cursor-pointer text-xs font-semibold"
+                        >
+                            Hủy bỏ
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting || isUploading}
+                            className="px-5 py-2 bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 text-white rounded-xl transition cursor-pointer text-xs font-semibold shadow-md shadow-violet-500/10 flex items-center space-x-1.5 disabled:opacity-50"
+                        >
+                            {isSubmitting ? (
+                                <Loader className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Save className="w-4 h-4" />
+                            )}
+                            <span>{isSubmitting ? (isUploading ? "Đang tải ảnh..." : "Đang lưu...") : "Cập nhật"}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
 
 const Profile = () => {
     const { id } = useParams(); // Lấy ID người dùng từ thanh địa chỉ /profile/:id
-    const { user: loggedInUser } = useAuth();
+    const { user: loggedInUser, setUser } = useAuth();
 
     const [profileUser, setProfileUser] = useState(null);
     const [userPosts, setUserPosts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [relation, setRelation] = useState({ status: "none", requestId: null });
+    const [showEditModal, setShowEditModal] = useState(false);
 
     const isOwnProfile = loggedInUser?.id === id;
 
@@ -148,7 +309,11 @@ const Profile = () => {
                     <div className="flex-1 text-center md:text-left space-y-4">
                         <div>
                             <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight">{profileUser.displayName}</h2>
-                            <p className="text-slate-500 text-sm mt-1">ID người dùng: {profileUser.id}</p>
+                            {profileUser.bio ? (
+                                <p className="text-slate-655 text-sm mt-2 italic whitespace-pre-line max-w-md">{profileUser.bio}</p>
+                            ) : (
+                                <p className="text-slate-400 text-sm mt-2 italic">Chưa có tiểu sử.</p>
+                            )}
                         </div>
 
                         <div className="flex flex-wrap justify-center md:justify-start gap-y-2 gap-x-6 text-sm text-slate-650">
@@ -217,6 +382,19 @@ const Profile = () => {
                                 </button>
                             </div>
                         )}
+
+                        {/* Nút chỉnh sửa trang cá nhân cho chính mình */}
+                        {isOwnProfile && (
+                            <div className="flex flex-wrap gap-3 justify-center md:justify-start pt-2">
+                                <button
+                                    onClick={() => setShowEditModal(true)}
+                                    className="flex items-center space-x-1.5 px-4 py-2.5 bg-violet-600 hover:bg-violet-750 text-white rounded-xl text-xs font-semibold cursor-pointer transition shadow-md shadow-violet-500/10"
+                                >
+                                    <Edit3 className="w-4 h-4" />
+                                    <span>Chỉnh sửa trang cá nhân</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -261,6 +439,23 @@ const Profile = () => {
                     </div>
                 )}
             </div>
+
+            {/* Modal chỉnh sửa trang cá nhân */}
+            {showEditModal && (
+                <EditProfileModal
+                    profileUser={profileUser}
+                    onClose={() => setShowEditModal(false)}
+                    onProfileUpdated={(updatedUser) => {
+                        setProfileUser(updatedUser);
+                        // Cập nhật lên AuthContext
+                        setUser(prev => ({
+                            ...prev,
+                            displayName: updatedUser.displayName,
+                            avatarUrl: updatedUser.avatarUrl
+                        }));
+                    }}
+                />
+            )}
         </div>
     );
 };

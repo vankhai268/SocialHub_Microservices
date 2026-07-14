@@ -10,7 +10,9 @@ const app = express();
 app.set('etag', false);
 
 // Middlewares
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 // Configure CORS for direct browser upload
 const corsOptions = {
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',

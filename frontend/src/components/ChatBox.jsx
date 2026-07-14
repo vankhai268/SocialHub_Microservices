@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useSocket } from "../context/SocketContext";
 import { X, Send, Loader, Image } from "lucide-react"; // <-- Import thêm Image
@@ -63,8 +64,79 @@ const ChatImage = ({ mediaId }) => {
     );
 };
 
+// Component hiển thị tin nhắn chia sẻ bài viết đẹp mắt tương tự Facebook
+const RenderShareMessage = ({ msgContent, isMe, onNavigate }) => {
+    let data = null;
+    try {
+        data = JSON.parse(msgContent);
+    } catch (e) {
+        return <div className="text-[10px] italic text-slate-400">Tin nhắn chia sẻ (Không tải được nội dung)</div>;
+    }
+
+    return (
+        <div className={`flex flex-col space-y-1 max-w-[200px] ${isMe ? "items-end" : "items-start"}`}>
+            {/* Lời dẫn đi kèm (nếu có) */}
+            {data.shareText && (
+                <div className={`px-3 py-1.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                    isMe ? "bg-violet-600 text-white rounded-br-none" : "bg-slate-100 text-slate-800 rounded-bl-none border border-slate-200"
+                }`}>
+                    {data.shareText}
+                </div>
+            )}
+            
+            {/* Block bài viết chia sẻ kiểu Facebook */}
+            <div
+                onClick={() => onNavigate(`/post/${data.postId}`)}
+                className="bg-slate-50 border border-slate-200 hover:border-violet-400 hover:bg-slate-100 rounded-xl overflow-hidden shadow-sm cursor-pointer transition duration-150 text-left w-full max-w-[190px] flex flex-col"
+            >
+                {/* Phần hình ảnh ở trên */}
+                {data.mediaId ? (
+                    <div className="w-full h-24 overflow-hidden bg-black/5 flex items-center justify-center border-b border-slate-200/60 relative shrink-0">
+                        <ChatImage mediaId={data.mediaId} />
+                        <div className="absolute top-1.5 left-1.5 flex items-center space-x-1 bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded-full border border-white/10 max-w-[90%] select-none">
+                            <img
+                                src={data.authorAvatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.postId}`}
+                                className="w-3.5 h-3.5 rounded-full object-cover border border-white/20"
+                                alt="Author"
+                            />
+                            <span className="font-bold text-[8px] text-white truncate">{data.authorName}</span>
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* Phần nội dung text và logo ở dưới */}
+                <div className="p-2.5 space-y-1.5">
+                    {!data.mediaId && (
+                        <div className="flex items-center space-x-1.5 border-b border-slate-200 pb-1.5">
+                            <img
+                                src={data.authorAvatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.postId}`}
+                                className="w-4.5 h-4.5 rounded-full object-cover border border-slate-200"
+                                alt="Author"
+                            />
+                            <span className="font-bold text-[9px] text-slate-850 truncate">{data.authorName}</span>
+                        </div>
+                    )}
+                    
+                    <p className="text-[9px] font-bold text-slate-800 line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                        {data.postContent || "Bài viết không có nội dung văn bản."}
+                    </p>
+
+                    {/* Logo SocialHub chân trang tương tự Facebook */}
+                    <div className="flex items-center space-x-1 text-[8px] text-slate-500 font-semibold pt-1.5 border-t border-slate-200/50 mt-1 select-none">
+                        <div className="w-3 h-3 rounded-full bg-violet-600 flex items-center justify-center text-white font-extrabold text-[7px]">
+                            S
+                        </div>
+                        <span>SocialHub</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const ChatBox = ({ conversation, onClose, currentUserId }) => {
     const { chatSocket } = useSocket();
+    const navigate = useNavigate();
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState("");
     const [isLoading, setIsLoading] = useState(true);
@@ -210,6 +282,25 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
+    // 4d. Dán ảnh trực tiếp từ clipboard
+    const handleInputPaste = (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") !== -1) {
+                const blob = items[i].getAsFile();
+                if (blob) {
+                    setImageFile(blob);
+                    const previewUrl = URL.createObjectURL(blob);
+                    setImagePreview(previewUrl);
+                    e.preventDefault(); // Ngăn hiển thị text nhị phân
+                    break;
+                }
+            }
+        }
+    };
+
     // 5. Gửi tin nhắn (Hỗ trợ cả tin nhắn văn bản và tin nhắn hình ảnh)
     const handleSendMessage = async (e) => {
         e.preventDefault();
@@ -313,22 +404,32 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                                         />
                                     )}
                                     
-                                    <div className={`px-3 py-1.5 rounded-2xl text-xs leading-relaxed break-words ${
-                                        isMe
-                                            ? "bg-violet-600 text-white rounded-br-none"
-                                            : "bg-slate-100 text-slate-800 rounded-bl-none border border-slate-200"
-                                    }`}>
-                                        {msg.type === "image" && msg.mediaId ? (
-                                            <div className="space-y-1.5">
+                                    {msg.type === "image" && msg.mediaId ? (
+                                        <div className={`flex flex-col space-y-1 ${isMe ? "items-end" : "items-start"}`}>
+                                            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-black/5">
                                                 <ChatImage mediaId={msg.mediaId} />
-                                                {msg.content && msg.content !== "Sent an image" && (
-                                                    <p className="mt-1 text-slate-800">{msg.content}</p>
-                                                )}
                                             </div>
-                                        ) : (
-                                            msg.content
-                                        )}
-                                    </div>
+                                            {msg.content && msg.content !== "Sent an image" && (
+                                                <div className={`px-3 py-1.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                                                    isMe
+                                                        ? "bg-violet-600 text-white rounded-br-none"
+                                                        : "bg-slate-100 text-slate-800 rounded-bl-none border border-slate-200"
+                                                }`}>
+                                                    {msg.content}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : msg.type === "share" ? (
+                                        <RenderShareMessage msgContent={msg.content} isMe={isMe} onNavigate={navigate} />
+                                    ) : (
+                                        <div className={`px-3 py-1.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                                            isMe
+                                                ? "bg-violet-600 text-white rounded-br-none"
+                                                : "bg-slate-100 text-slate-800 rounded-bl-none border border-slate-200"
+                                        }`}>
+                                            {msg.content}
+                                        </div>
+                                    )}
                                 </div>
                                 {/* Thời gian gửi tin nhắn */}
                                 <span className={`text-[8px] text-slate-400 select-none ${isMe ? "mr-1" : "ml-8.5"}`}>
@@ -394,6 +495,7 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                         type="text"
                         value={inputText}
                         onChange={handleInputChange}
+                        onPaste={handleInputPaste}
                         placeholder={isSubmitting ? "Đang gửi..." : "Aa..."}
                         disabled={isSubmitting}
                         className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-600 focus:ring-1 focus:ring-violet-600 transition disabled:opacity-50"
