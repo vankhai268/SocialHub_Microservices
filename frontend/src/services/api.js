@@ -19,6 +19,16 @@ api.interceptors.request.use(
         if (token) {
             config.headers["Authorization"] = `Bearer ${token}`;
         }
+
+        // Tự động đính kèm query parameter để vượt qua preflight CORS của ngrok
+        const isNgrok = (config.baseURL && config.baseURL.includes("ngrok")) || 
+                        (config.url && config.url.includes("ngrok"));
+        if (isNgrok) {
+            config.params = {
+                ...config.params,
+                "ngrok-skip-browser-warning": "true"
+            };
+        }
         return config;
     },
     (error) => Promise.reject(error)
