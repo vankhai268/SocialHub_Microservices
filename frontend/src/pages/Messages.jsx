@@ -182,7 +182,8 @@ const Messages = () => {
             try {
                 const res = await api.get(`/conversations/${cId}/messages`);
                 if (res.data && res.data.success) {
-                    setMessages(res.data.data || []);
+                    // Đảo ngược mảng tin nhắn lịch sử (từ mới nhất về cũ nhất sang cũ nhất tới mới nhất) để hiển thị đúng thứ tự thời gian
+                    setMessages(res.data.data?.data ? [...res.data.data.data].reverse() : []);
                 }
             } catch (err) {
                 console.error("❌ Lỗi tải lịch sử tin nhắn:", err.message);
