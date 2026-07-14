@@ -183,3 +183,35 @@ export const getConversationById = async (userId, conversationId) => {
 
   return convJson;
 };
+
+/**
+ * Delete a conversation and its messages
+ * @param {string} userId - User making delete request
+ * @param {string} conversationId 
+ * @returns {Promise<Object>}
+ */
+export const deleteConversation = async (userId, conversationId) => {
+  const conv = await Conversation.findById(conversationId);
+  if (!conv) {
+    throw new NotFoundError('Conversation not found');
+  }
+
+  // Verify membership
+  const isParticipant = conv.participants.some(p => p.userId === userId);
+  if (!isParticipant) {
+    throw new ForbiddenError('You are not authorized to delete this conversation');
+  }
+
+  // Delete conversation
+  await Conversation.findByIdAndDelete(conversationId);
+
+  // Delete all messages belonging to this conversation
+  await Message.deleteMany({ conversationId });
+
+  // If it's a group, we can also delete the group metadata
+  if (conv.type === 'group' && conv.groupRef) {
+    await GroupChat.findByIdAndDelete(conv.groupRef);
+  }
+
+  return { message: 'Conversation deleted successfully' };
+};

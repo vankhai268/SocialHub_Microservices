@@ -99,7 +99,7 @@ const Login = () => {
 
                 <div className="mt-8 text-center text-slate-500 text-sm">
                     Chưa có tài khoản?{" "}
-                    <Link to="/register" className="text-violet-650 hover:text-violet-700 font-medium transition underline">
+                    <Link to="/register" className="text-violet-600 hover:text-violet-700 font-medium transition underline">
                         Đăng ký ngay
                     </Link>
                 </div>

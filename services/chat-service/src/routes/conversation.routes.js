@@ -4,7 +4,8 @@ import {
   listConversations,
   createConversation,
   getMessages,
-  getConversationById
+  getConversationById,
+  deleteConversation
 } from '../controllers/conversation.controller.js';
 
 const router = express.Router();
@@ -13,5 +14,6 @@ router.get('/', requireAuth, listConversations);
 router.post('/', requireAuth, createConversation);
 router.get('/:id', requireAuth, getConversationById);
 router.get('/:id/messages', requireAuth, getMessages);
+router.delete('/:id', requireAuth, deleteConversation);
 
 export default router;

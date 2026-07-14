@@ -118,7 +118,7 @@ const Register = () => {
 
                 <div className="mt-8 text-center text-slate-500 text-sm">
                     Đã có tài khoản rồi?{" "}
-                    <Link to="/login" className="text-violet-650 hover:text-violet-700 font-medium transition underline">
+                    <Link to="/login" className="text-violet-600 hover:text-violet-700 font-medium transition underline">
                         Đăng nhập ngay
                     </Link>
                 </div>

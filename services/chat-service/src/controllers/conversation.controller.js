@@ -70,3 +70,16 @@ export const getConversationById = async (req, res) => {
     return handleError(res, error, 'Get Conversation Error');
   }
 };
+
+/**
+ * DELETE /conversations/:id
+ */
+export const deleteConversation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await conversationService.deleteConversation(req.user.id, id);
+    return successResponse(res, 200, result);
+  } catch (error) {
+    return handleError(res, error, 'Delete Conversation Error');
+  }
+};
