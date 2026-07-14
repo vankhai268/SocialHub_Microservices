@@ -40,9 +40,7 @@ const EditProfileModal = ({ profileUser, onClose, onProfileUpdated }) => {
                 const formData = new FormData();
                 formData.append("file", avatarFile);
                 console.log("[PROFILE_UPDATE] Uploading avatar file:", avatarFile.name);
-                const uploadRes = await api.post("/media/upload", formData, {
-                    headers: { "Content-Type": "multipart/form-data" }
-                });
+                const uploadRes = await api.post("/media/upload", formData);
                 
                 if (uploadRes.data && uploadRes.data.id) {
                     uploadedAvatarUrl = `/media/file/${uploadRes.data.id}`;
@@ -457,12 +455,8 @@ const Profile = () => {
                     onClose={() => setShowEditModal(false)}
                     onProfileUpdated={(updatedUser) => {
                         setProfileUser(updatedUser);
-                        // Cập nhật lên AuthContext
-                        setUser(prev => ({
-                            ...prev,
-                            displayName: updatedUser.displayName,
-                            avatarUrl: updatedUser.avatarUrl
-                        }));
+                        // Cập nhật lên AuthContext - merge đầy đủ tất cả fields từ server
+                        setUser(prev => ({ ...prev, ...updatedUser }));
                     }}
                 />
             )}

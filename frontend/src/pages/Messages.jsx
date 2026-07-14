@@ -349,67 +349,41 @@ const Messages = () => {
         fetchConversations();
     }, []);
 
-    // 2. Join và tự động Re-join room Websocket khi socket mất kết nối rồi tự kết nối lại (reconnect)
+    // 2. Join v\u00e0 t\u1ef1 \u0111\u1ed9ng Re-join room Websocket khi socket m\u1ea5t k\u1ebft n\u1ed1i r\u1ed3i t\u1ef1 k\u1ebft n\u1ed1i l\u1ea1i (reconnect)
+    // + L\u1eafng nghe s\u1ef1 ki\u1ec7n nh\u1eafn tin Realtime qua Socket.IO Chat Namespace
     useEffect(() => {
         if (!chatSocket || !selectedConv) return;
         const cId = selectedConv._id || selectedConv.id;
 
+        // Join room khi m\u1edf h\u1ed9i tho\u1ea1i v\u00e0 t\u1ef1 \u0111\u1ed9ng re-join khi socket reconnect
         const joinRoom = () => {
             chatSocket.emit("conversation:join", { conversationId: cId });
             console.log(`📡 Đã kết nối & gửi yêu cầu join conversation room: ${cId}`);
         };
 
         joinRoom();
-
-        // Lắng nghe sự kiện kết nối lại để tự động join lại room
         chatSocket.on("connect", joinRoom);
 
-        return () => {
-            chatSocket.off("connect", joinRoom);
-        };
-    }, [selectedConv, chatSocket]);
-
-    // 2b. Lắng nghe sự kiện nhắn tin Realtime qua Socket.IO Chat Namespace
-    useEffect(() => {
-        if (!chatSocket) return;
-
+        // L\u1eafng nghe tin nh\u1eafn m\u1edbi \u0111\u00fang c\u00e1ch: \u0111\u0103ng k\u00fd listener \u1edf c\u1ea5p useEffect, kh\u00f4ng ph\u1ea3i trong callback
         const handleNewMessage = (msg) => {
-            if (selectedConv) {
-                const cId = selectedConv._id || selectedConv.id;
-                if (String(msg.conversationId) === String(cId)) {
-                    if (String(msg.conversationId) === String(cId)) {
-                        setMessages((prev) => [...prev, msg]);
-                        // Đánh dấu đã đọc gửi ngược lại
-                        chatSocket.emit("message:read", { conversationId: cId, messageId: msg.id || msg._id });
-                    }
-                }
-                fetchConversations();
-            };
-
-            chatSocket.on("message:received", handleNewMessage);
-            return () => {
-                chatSocket.off("message:received", handleNewMessage);
-            };
-        }
-    }, [chatSocket, selectedConv]);
-
-    // 2b. Join Room conversation socket khi thay đổi cuộc hội thoại được chọn
-    useEffect(() => {
-        if (!chatSocket || !selectedConv) return;
-        const cId = selectedConv._id || selectedConv.id;
-
-        const joinRoom = () => {
-            chatSocket.emit("conversation:join", { conversationId: cId });
-            console.log(`📡 [Messages page] Đã gửi yêu cầu join conversation room: ${cId}`);
+            if (String(msg.conversationId) === String(cId)) {
+                setMessages((prev) => [...prev, msg]);
+                // \u0110\u00e1nh d\u1ea5u \u0111\u00e3 \u0111\u1ecdc g\u1eedi ng\u01b0\u1ee3c l\u1ea1i
+                chatSocket.emit("message:read", { conversationId: cId, messageId: msg.id || msg._id });
+            }
+            // C\u1eadp nh\u1eadt l\u1ea1i conversation list (unread count, last message)
+            fetchConversations();
         };
 
-        joinRoom();
-        chatSocket.on("connect", joinRoom);
+        chatSocket.on("message:received", handleNewMessage);
 
         return () => {
             chatSocket.off("connect", joinRoom);
+            chatSocket.off("message:received", handleNewMessage);
         };
     }, [chatSocket, selectedConv]);
+
+
 
     // 3. Khi chọn 1 cuộc hội thoại -> Tải danh sách tin nhắn lịch sử
     useEffect(() => {
@@ -498,9 +472,7 @@ const Messages = () => {
                 const uploadPromises = selectedFiles.map(async (item) => {
                     const formData = new FormData();
                     formData.append("file", item.file);
-                    const res = await api.post("/media/upload", formData, {
-                        headers: { "Content-Type": "multipart/form-data" }
-                    });
+                    const res = await api.post("/media/upload", formData);
                     return res.data?.id;
                 });
                 const resIds = await Promise.all(uploadPromises);

@@ -13,17 +13,11 @@ const ChatImage = ({ mediaId }) => {
         let localUrl = "";
         const fetchImage = async () => {
             try {
-                // 1. Lấy url tương đối của ảnh từ gateway
-                const res = await api.get(`/media/${mediaId}/url`);
-                if (res.data && res.data.url) {
-                    const url = res.data.url;
-                    const fullUrl = url.startsWith("http") ? url : `${api.defaults.baseURL}${url}`;
-                    
-                    // 2. Tải blob ảnh kèm các header cần thiết
-                    const imgRes = await api.get(fullUrl, { responseType: "blob" });
-                    localUrl = URL.createObjectURL(imgRes.data);
-                    setImageUrl(localUrl);
-                }
+                // Tải blob ảnh/video trực tiếp qua /media/file/:id (kèm ngrok-skip-browser-warning header tự động)
+                const res = await api.get(`/media/file/${mediaId}`, { responseType: "blob" });
+                localUrl = URL.createObjectURL(res.data);
+                const type = res.data.type || "";
+                setImageUrl({ url: localUrl, isVideo: type.startsWith("video/") });
             } catch (err) {
                 console.error("❌ Lỗi tải ảnh chat:", err.message);
             } finally {
@@ -54,12 +48,22 @@ const ChatImage = ({ mediaId }) => {
         return <p className="text-[10px] text-red-400 italic">Không tải được ảnh</p>;
     }
 
+    if (imageUrl.isVideo) {
+        return (
+            <video
+                src={imageUrl.url}
+                controls
+                className="rounded-lg max-h-48 max-w-full object-cover"
+            />
+        );
+    }
+
     return (
         <img
-            src={imageUrl}
+            src={imageUrl.url}
             alt="Attached"
             className="rounded-lg max-h-48 object-contain cursor-pointer hover:opacity-90 transition"
-            onClick={() => window.open(imageUrl, "_blank")}
+            onClick={() => window.open(imageUrl.url, "_blank")}
         />
     );
 };
@@ -315,11 +319,7 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                 const formData = new FormData();
                 formData.append("file", imageFile);
 
-                const uploadRes = await api.post("/media/upload", formData, {
-                    headers: {
-                        "Content-Type": "multipart/form-data",
-                    },
-                });
+                const uploadRes = await api.post("/media/upload", formData);
 
                 if (uploadRes.data && uploadRes.data.id) {
                     mediaId = uploadRes.data.id;

@@ -15,7 +15,19 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'ngrok-skip-browser-warning',
+    'x-user-id',
+    'x-requested-with'
+  ],
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  credentials: false
+}));
 
 // Global Cache-Control disabling middleware
 app.use((req, res, next) => {

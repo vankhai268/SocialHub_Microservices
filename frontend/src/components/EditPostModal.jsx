@@ -64,11 +64,7 @@ const EditPostModal = ({ post, imageUrl, onClose, onPostUpdated }) => {
                 const formData = new FormData();
                 formData.append("file", newImageFile);
 
-                const uploadRes = await api.post("/media/upload", formData, {
-                    headers: {
-                        "Content-Type": "multipart/form-data",
-                    },
-                });
+                const uploadRes = await api.post("/media/upload", formData);
 
                 if (uploadRes.data && uploadRes.data.id) {
                     finalMediaIds = [uploadRes.data.id];

@@ -30,7 +30,7 @@ export const mediaService = {
     });
 
     return {
-      id: media._id,
+      id: media._id.toString(),
       originalName: media.originalName,
       mimeType: media.mimeType,
       size: media.size,
@@ -66,7 +66,7 @@ export const mediaService = {
     const expiresAt = new Date(Date.now() + config.PRESIGNED_URL_TTL * 1000);
 
     return {
-      mediaId: media._id,
+      mediaId: media._id.toString(),
       url,
       expiresAt,
       ttlSeconds: config.PRESIGNED_URL_TTL

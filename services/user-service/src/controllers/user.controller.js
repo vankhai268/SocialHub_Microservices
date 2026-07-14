@@ -18,7 +18,7 @@ export const getUserById = async (req, res) => {
         }
 
         const userResult = await pool.query(
-            'SELECT id, email, display_name as "displayName", bio, avatar_url as "avatarUrl" FROM users WHERE id = $1',
+            'SELECT id, email, display_name as "displayName", bio, avatar_url as "avatarUrl", created_at as "createdAt" FROM users WHERE id = $1',
             [id]
         );
 

@@ -55,7 +55,11 @@ export const SocketProvider = ({ children }) => {
                 cb({ token: localStorage.getItem("accessToken") });
             },
             path: "/notification/socket.io/",
-            transports: ["websocket"]
+            transports: ["websocket"],
+            // Thêm header để bypass ngrok browser warning cho WebSocket upgrade request
+            extraHeaders: {
+                "ngrok-skip-browser-warning": "any-value"
+            }
         });
 
         notifSock.on("connect", () => {
@@ -113,7 +117,11 @@ export const SocketProvider = ({ children }) => {
                 cb({ token: localStorage.getItem("accessToken") });
             },
             path: "/chat/socket.io/",
-            transports: ["websocket"]
+            transports: ["websocket"],
+            // Thêm header để bypass ngrok browser warning cho WebSocket upgrade request
+            extraHeaders: {
+                "ngrok-skip-browser-warning": "any-value"
+            }
         });
 
         chSock.on("connect", () => {
