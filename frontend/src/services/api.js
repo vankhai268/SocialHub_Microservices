@@ -57,6 +57,9 @@ const resolveUrls = (obj) => {
                         resolvedUrl += resolvedUrl.includes("?") ? "&ngrok-skip-browser-warning=true" : "?ngrok-skip-browser-warning=true";
                     }
 
+                    // Thêm tham số thời gian để tránh trình duyệt cache ảnh đại diện
+                    resolvedUrl += (resolvedUrl.includes("?") ? "&" : "?") + `t=${Date.now()}`;
+
                     obj[key] = resolvedUrl;
                 }
             } else if (typeof val === "object" && val !== null) {
