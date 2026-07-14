@@ -165,6 +165,28 @@ Khi khởi tạo xong, instance chỉ có tài khoản quản trị mặc địn
         PG_PASSWORD: c29jaWFsaHViX3NlY3JldA==
         ```
 
+#### ⚠️ KHẮC PHỤC LỖI THIẾU EXTENSION UUID CHO POST-SERVICE (BẮT BUỘC):
+Dịch vụ `post-service` sử dụng UUID làm khóa chính cho các bảng dữ liệu và yêu cầu extension `uuid-ossp` để sinh ID tự động. Cloud SQL mặc định sẽ không tự kích hoạt extension này, gây ra lỗi crash pod (`Exit Code 1` với thông báo `unrecognized function uuid_generate_v4()`). 
+
+Hãy khắc phục bằng các lệnh dưới đây trên **Cloud Shell** (sau khi cụm GKE đã được tạo thành công):
+
+1.  **Đặt mật khẩu cho tài khoản root `postgres`**:
+    ```bash
+    gcloud sql users set-password postgres \
+        --instance=socialhub-db-postgres \
+        --password=socialhub_secret
+    ```
+2.  **Chạy PostgreSQL Client tạm thời trong GKE để kích hoạt extension**:
+    ```bash
+    kubectl run pg-client --rm -i --tty --image=postgres:16 \
+        --env="PGPASSWORD=socialhub_secret" \
+        -- psql -h 10.128.0.6 -U postgres -d socialhub_post -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+    ```
+3.  **Khởi động lại Pod `post-service` để tự động chạy lại database migration**:
+    ```bash
+    kubectl delete pod -l app=post-service
+    ```
+
 ---
 
 
