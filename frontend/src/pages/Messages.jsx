@@ -380,7 +380,8 @@ const Messages = () => {
         // Lắng nghe tin nhắn mới đúng cách: đăng ký listener ở cấp useEffect, không phải trong callback
         const handleNewMessage = (msg) => {
             if (String(msg.conversationId) === String(cId)) {
-                setMessages((prev) => [...prev, msg]);
+                const newMsg = { ...msg, allowScroll: true };
+                setMessages((prev) => [...prev, newMsg]);
                 chatSocket.emit("message:read", { conversationId: cId, messageId: msg.id || msg._id });
                 setTimeout(() => {
                     scrollToBottom("smooth");
@@ -424,7 +425,8 @@ const Messages = () => {
                 const res = await api.get(`/conversations/${cId}/messages?limit=10`);
                 if (res.data && res.data.success) {
                     const fetchedMsgs = res.data.data?.data ? [...res.data.data.data].reverse() : [];
-                    setMessages(fetchedMsgs);
+                    const enrichedMsgs = fetchedMsgs.map(msg => ({ ...msg, allowScroll: true }));
+                    setMessages(enrichedMsgs);
                     setHasMore(res.data.data?.hasMore || false);
                     setNextCursor(res.data.data?.nextCursor || null);
 
@@ -465,7 +467,8 @@ const Messages = () => {
             const res = await api.get(`/conversations/${cId}/messages?before=${nextCursor}&limit=10`);
             if (res.data && res.data.success) {
                 const oldMsgs = res.data.data?.data ? [...res.data.data.data].reverse() : [];
-                setMessages(prev => [...oldMsgs, ...prev]);
+                const enrichedOldMsgs = oldMsgs.map(msg => ({ ...msg, allowScroll: false }));
+                setMessages(prev => [...enrichedOldMsgs, ...prev]);
                 setHasMore(res.data.data?.hasMore || false);
                 setNextCursor(res.data.data?.nextCursor || null);
 
@@ -867,9 +870,9 @@ const Messages = () => {
 
                                                 {/* Hiển thị Media đính kèm (Hình ảnh / Video) độc lập - Không bị lót viền màu tím */}
                                                 {msg.type === "image" && msg.mediaId ? (
-                                                    <div className="flex flex-col space-y-1 items-end">
+                                                    <div className={`flex flex-col space-y-1 ${isMe ? "items-end" : "items-start"}`}>
                                                         <div className="overflow-hidden rounded-2xl border border-slate-200/80 shadow-sm bg-black/5">
-                                                            <ChatMedia mediaId={msg.mediaId} onLoad={() => scrollToBottom("smooth")} />
+                                                            <ChatMedia mediaId={msg.mediaId} onLoad={msg.allowScroll ? () => scrollToBottom("smooth") : undefined} />
                                                         </div>
                                                         {msg.content && msg.content !== "Sent an image" && (
                                                             <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${isMe ? "bg-violet-600 text-white rounded-br-none" : "bg-white text-slate-800 rounded-bl-none border border-slate-200"
