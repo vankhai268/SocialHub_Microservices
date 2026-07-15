@@ -14,7 +14,7 @@ const ChatImage = ({ mediaId }) => {
         const fetchImage = async () => {
             try {
                 // Tải blob ảnh/video trực tiếp qua /media/file/:id (kèm ngrok-skip-browser-warning header tự động)
-                const res = await api.get(`/media/file/${mediaId}`, { responseType: "blob" });
+                const res = await api.get(`/media/file/${mediaId}?variant=thumbnail`, { responseType: "blob" });
                 localUrl = URL.createObjectURL(res.data);
                 const type = res.data.type || "";
                 setImageUrl({ url: localUrl, isVideo: type.startsWith("video/") });

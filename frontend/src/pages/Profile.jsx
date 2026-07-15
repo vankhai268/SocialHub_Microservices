@@ -4,6 +4,7 @@ import api from "../services/api";
 import PostCard from "../components/PostCard";
 import { useAuth } from "../context/AuthContext";
 import { Loader, Calendar, Mail, FileText, UserPlus, UserCheck, UserMinus, MessageSquare, Edit3, Camera, Save, X } from "lucide-react";
+import imageCompression from "browser-image-compression";
 
 // Modal chỉnh sửa profile
 const EditProfileModal = ({ profileUser, onClose, onProfileUpdated }) => {
@@ -37,8 +38,21 @@ const EditProfileModal = ({ profileUser, onClose, onProfileUpdated }) => {
             // 1. Tải lên avatar mới nếu được chọn
             if (avatarFile) {
                 setIsUploading(true);
+                let fileToUpload = avatarFile;
+                if (avatarFile.type && avatarFile.type.startsWith("image/") && avatarFile.type !== "image/gif") {
+                    try {
+                        fileToUpload = await imageCompression(avatarFile, {
+                            maxSizeMB: 0.5,
+                            maxWidthOrHeight: 800,
+                            useWebWorker: true,
+                        });
+                    } catch (err) {
+                        console.warn("[COMPRESS] Avatar fallback:", err.message);
+                        fileToUpload = avatarFile;
+                    }
+                }
                 const formData = new FormData();
-                formData.append("file", avatarFile);
+                formData.append("file", fileToUpload);
                 console.log("[PROFILE_UPDATE] Uploading avatar file:", avatarFile.name);
                 const uploadRes = await api.post("/media/upload", formData);
                 

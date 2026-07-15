@@ -68,11 +68,19 @@ export const minioService = {
   },
 
   /**
+   * Lấy thông tin metadata (kích thước thực tế) của file từ MinIO
+   */
+  statFile: async (objectKey) => {
+    return minioClient.statObject(config.MINIO_BUCKET_NAME, objectKey);
+  },
+
+  /**
    * Xóa file khỏi MinIO
    */
   deleteFile: async (objectKey) => {
     return minioClient.removeObject(config.MINIO_BUCKET_NAME, objectKey);
   },
+
 
   /**
    * Kiểm tra Health cho Gateway
