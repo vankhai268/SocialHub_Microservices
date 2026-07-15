@@ -143,6 +143,57 @@ paths:
         '404':
           description: Media not found
 
+  /media/file/{id}:
+    get:
+      summary: Stream binary media file content
+      operationId: streamMediaFile
+      tags: [Media]
+      description: |
+        Streams the binary media file content with immutable caching headers.
+        Supports rendering compressed WebP image variants (thumbnail, medium, original).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: variant
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [thumbnail, medium, original]
+            default: medium
+          description: Image variant size (thumbnail = 200px, medium = 800px, original = 1920px). Falls back to original/raw file if variant does not exist.
+      responses:
+        '200':
+          description: Binary file stream
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=31536000, immutable
+            ETag:
+              schema:
+                type: string
+                example: '"65f12345-medium"'
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Media file not found
+
   /media/{id}/url:
     get:
       summary: Get presigned URL for a media file

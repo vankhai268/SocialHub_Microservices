@@ -8,6 +8,14 @@ const mediaSchema = new mongoose.Schema(
     size: { type: Number, required: true },
     objectKey: { type: String, required: true },
     uploadedBy: { type: String, required: true }, // User ID của người upload
+    compressedSize: { type: Number },
+    compressionRatio: { type: Number },
+    format: { type: String, default: null },
+    variants: {
+      type: Map,
+      of: String,
+      default: new Map(),
+    },
   },
   {
     timestamps: true, // Tự động tạo createdAt và updatedAt

@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Image, Video, Send, X, Loader } from "lucide-react";
+import { compressImageBeforeUpload } from "../utils/imageCompressor";
 
 const CreatePost = ({ onPostCreated }) => {
     const { user } = useAuth();
@@ -45,13 +46,24 @@ const CreatePost = ({ onPostCreated }) => {
         let mediaIds = [];
 
         try {
-            // Bước A: Upload tất cả các file đã chọn song song lên media-service
+            // Bước A: Nén ảnh tại Client & Upload tất cả file song song lên media-service
             if (selectedFiles.length > 0) {
                 setIsUploading(true);
                 const uploadPromises = selectedFiles.map(async (item) => {
+                    let fileToUpload = item.file;
+                    if (!item.isVideo && item.file.type.startsWith('image/') && item.file.type !== 'image/gif') {
+                        try {
+                            fileToUpload = await compressImageBeforeUpload(item.file);
+                        } catch (err) {
+                            console.warn('[COMPRESS] CreatePost fallback to raw file:', err.message);
+                        }
+                    }
+
                     const formData = new FormData();
-                    formData.append("file", item.file);
-                    const res = await api.post("/media/upload", formData);
+                    formData.append("file", fileToUpload);
+                    const res = await api.post("/media/upload", formData, {
+                        headers: { "Content-Type": "multipart/form-data" }
+                    });
                     return res.data?.id;
                 });
 

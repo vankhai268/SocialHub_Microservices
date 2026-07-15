@@ -4,17 +4,30 @@ import api from "../services/api";
 import { Heart, MessageSquare, Share2, Trash2, Send, Loader, Edit3 } from "lucide-react";
 import ShareModal from "./ShareModal";
 import EditPostModal from "./EditPostModal";
+import ImageLightboxModal from "./ImageLightboxModal";
 import { useAuth } from "../context/AuthContext"; // <-- Import useAuth
 
 const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpdated }) => {
     const { user: currentUser } = useAuth(); // Lấy thông tin user hiện tại
     const [showEditModal, setShowEditModal] = useState(false);
+    const [activeLightboxUrl, setActiveLightboxUrl] = useState(null);
     const [isLiked, setIsLiked] = useState(post.isLikedByMe || false);
     const [likeCount, setLikeCount] = useState(post.like_count || 0);
     const [commentCount, setCommentCount] = useState(post.comment_count || 0);
     const [shareCount, setShareCount] = useState(post.share_count || 0);
     const [imageUrl, setImageUrl] = useState("");
     const [isLoadingImage, setIsLoadingImage] = useState(false);
+
+    // Handler tải bản original sắc nét cho Lightbox Modal
+    const handleOpenLightbox = async (mId) => {
+        try {
+            const res = await api.get(`/media/file/${mId}?variant=original`, { responseType: "blob" });
+            const objUrl = URL.createObjectURL(res.data);
+            setActiveLightboxUrl(objUrl);
+        } catch (err) {
+            console.error("❌ Lỗi tải ảnh chất lượng cao gốc:", err.message);
+        }
+    };
 
     // Trạng thái cho bài đăng được chia sẻ
     const [originalPost, setOriginalPost] = useState(null);
@@ -131,18 +144,20 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
     // 1. Tải tất cả Media (Ảnh & Video) đính kèm của bài viết
     useEffect(() => {
         let createdObjectUrls = [];
+        const mediaList = post.media_ids || post.mediaIds || [];
         const fetchAllMedia = async () => {
-            if (post.media_ids && post.media_ids.length > 0) {
+            if (mediaList && mediaList.length > 0) {
                 setIsLoadingMedia(true);
                 try {
-                    const promises = post.media_ids.map(async (mId) => {
+                    const promises = mediaList.map(async (mId) => {
                         try {
-                            const res = await api.get(`/media/file/${mId}`, { responseType: "blob" });
+                            const res = await api.get(`/media/file/${mId}?variant=medium`, { responseType: "blob" });
                             const objUrl = URL.createObjectURL(res.data);
                             createdObjectUrls.push(objUrl);
                             const type = res.data.type || "";
                             return { id: mId, url: objUrl, isVideo: type.startsWith("video/") };
                         } catch (err) {
+                            console.error(`❌ Lỗi lấy media ${mId}:`, err.message);
                             return null;
                         }
                     });
@@ -155,6 +170,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                 }
             } else {
                 setMediaItems([]);
+                setIsLoadingMedia(false);
             }
         };
         fetchAllMedia();
@@ -162,7 +178,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
         return () => {
             createdObjectUrls.forEach((url) => URL.revokeObjectURL(url));
         };
-    }, [post.media_ids]);
+    }, [JSON.stringify(post.media_ids || post.mediaIds || [])]);
 
     // 2. Lấy thông tin bài gốc nhúng nếu là bài được chia sẻ (is_shared = true)
     useEffect(() => {
@@ -187,13 +203,14 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
     // 2b. Tải tất cả Media (Ảnh & Video) của bài viết gốc
     useEffect(() => {
         let createdObjectUrls = [];
+        const originalMediaList = originalPost ? (originalPost.media_ids || originalPost.mediaIds || []) : [];
         const fetchOriginalMedia = async () => {
-            if (originalPost && originalPost.media_ids && originalPost.media_ids.length > 0) {
+            if (originalMediaList && originalMediaList.length > 0) {
                 setIsLoadingOriginalMedia(true);
                 try {
-                    const promises = originalPost.media_ids.map(async (mId) => {
+                    const promises = originalMediaList.map(async (mId) => {
                         try {
-                            const res = await api.get(`/media/file/${mId}`, { responseType: "blob" });
+                            const res = await api.get(`/media/file/${mId}?variant=medium`, { responseType: "blob" });
                             const objUrl = URL.createObjectURL(res.data);
                             createdObjectUrls.push(objUrl);
                             const type = res.data.type || "";
@@ -211,6 +228,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                 }
             } else {
                 setOriginalMediaItems([]);
+                setIsLoadingOriginalMedia(false);
             }
         };
         fetchOriginalMedia();
@@ -218,7 +236,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
         return () => {
             createdObjectUrls.forEach((url) => URL.revokeObjectURL(url));
         };
-    }, [originalPost]);
+    }, [JSON.stringify(originalPost ? (originalPost.media_ids || originalPost.mediaIds || []) : [])]);
 
     // 3. Tải danh sách bình luận khi mở khung accordion
     useEffect(() => {
@@ -404,7 +422,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                                     src={item.url}
                                     alt="Post Attachment"
                                     className="w-full max-h-[450px] object-cover hover:opacity-95 transition cursor-pointer"
-                                    onClick={() => window.open(item.url, "_blank")}
+                                    onClick={() => handleOpenLightbox(item.id)}
                                 />
                             )}
                         </div>
@@ -692,6 +710,17 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                     imageUrl={imageUrl}
                     onClose={() => setShowEditModal(false)}
                     onPostUpdated={handlePostUpdated}
+                />
+            )}
+
+            {/* POP-UP MODAL XEM ẢNH FULLSCREEN */}
+            {activeLightboxUrl && (
+                <ImageLightboxModal
+                    imageUrl={activeLightboxUrl}
+                    onClose={() => {
+                        URL.revokeObjectURL(activeLightboxUrl);
+                        setActiveLightboxUrl(null);
+                    }}
                 />
             )}
         </div>

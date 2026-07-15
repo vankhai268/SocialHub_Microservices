@@ -35,14 +35,15 @@ export const mediaController = {
   streamMedia: async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { stream, mimeType, size } = await mediaService.getFileStream(id);
+      const variant = req.query.variant || 'medium';
+      const { stream, mimeType, size } = await mediaService.getFileStream(id, variant);
       
       res.setHeader('Content-Type', mimeType);
       if (size) {
         res.setHeader('Content-Length', size);
       }
-      // Cache-Control header to cache images for 1 year in browser
-      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('ETag', `"${id}-${variant}"`);
       
       stream.pipe(res);
     } catch (err) {

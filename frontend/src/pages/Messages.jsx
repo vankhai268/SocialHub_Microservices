@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import api from "../services/api";
+import ImageLightboxModal from "../components/ImageLightboxModal";
+import { compressImageBeforeUpload } from "../utils/imageCompressor";
 import {
     MessageSquare,
     Send,
@@ -19,7 +21,7 @@ import {
 } from "lucide-react";
 
 // Component con tải Ảnh & Video an toàn bằng blob đính kèm JWT Token (Không có viền lót tím)
-const ChatMedia = ({ mediaId, onLoad }) => {
+const ChatMedia = ({ mediaId, onLoad, onOpenLightbox }) => {
     const [mediaData, setMediaData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -88,8 +90,8 @@ const ChatMedia = ({ mediaId, onLoad }) => {
             src={mediaData.url}
             alt="Attached"
             className="rounded-xl max-h-72 max-w-full object-contain cursor-pointer hover:opacity-95 transition shadow-sm"
-            onClick={() => window.open(mediaData.url, "_blank")}
             onLoad={onLoad}
+            onClick={() => (onOpenLightbox ? onOpenLightbox(mediaId) : window.open(mediaData.url, "_blank"))}
         />
     );
 };
@@ -327,9 +329,20 @@ const Messages = () => {
     const [friends, setFriends] = useState([]);
     const [selectedFriends, setSelectedFriends] = useState([]);
 
-    // Multi-file media attachments
+    // Multi-file media attachments & Lightbox Modal
     const [selectedFiles, setSelectedFiles] = useState([]); // [{ id, file, previewUrl, isVideo }]
     const [isSending, setIsSending] = useState(false);
+    const [activeLightboxUrl, setActiveLightboxUrl] = useState(null);
+
+    const handleOpenLightbox = async (mId) => {
+        try {
+            const res = await api.get(`/media/file/${mId}?variant=original`, { responseType: "blob" });
+            const objUrl = URL.createObjectURL(res.data);
+            setActiveLightboxUrl(objUrl);
+        } catch (err) {
+            console.error("❌ Lỗi tải ảnh chất lượng cao gốc:", err.message);
+        }
+    };
 
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -556,12 +569,23 @@ const Messages = () => {
         try {
             let uploadedMediaIds = [];
 
-            // Bước A: Upload tất cả file media đính kèm nếu có
+            // Bước A: Nén ảnh tại Client & Upload tất cả file media đính kèm nếu có
             if (selectedFiles.length > 0) {
                 const uploadPromises = selectedFiles.map(async (item) => {
+                    let fileToUpload = item.file;
+                    if (!item.isVideo && item.file.type.startsWith('image/') && item.file.type !== 'image/gif') {
+                        try {
+                            fileToUpload = await compressImageBeforeUpload(item.file);
+                        } catch (err) {
+                            console.warn('[COMPRESS] Messages fallback to raw file:', err.message);
+                        }
+                    }
+
                     const formData = new FormData();
-                    formData.append("file", item.file);
-                    const res = await api.post("/media/upload", formData);
+                    formData.append("file", fileToUpload);
+                    const res = await api.post("/media/upload", formData, {
+                        headers: { "Content-Type": "multipart/form-data" }
+                    });
                     return res.data?.id;
                 });
                 const resIds = await Promise.all(uploadPromises);
@@ -872,7 +896,11 @@ const Messages = () => {
                                                 {msg.type === "image" && msg.mediaId ? (
                                                     <div className={`flex flex-col space-y-1 ${isMe ? "items-end" : "items-start"}`}>
                                                         <div className="overflow-hidden rounded-2xl border border-slate-200/80 shadow-sm bg-black/5">
-                                                            <ChatMedia mediaId={msg.mediaId} onLoad={msg.allowScroll ? () => scrollToBottom("smooth") : undefined} />
+                                                            <ChatMedia
+                                                                mediaId={msg.mediaId}
+                                                                onLoad={msg.allowScroll ? () => scrollToBottom("smooth") : undefined}
+                                                                onOpenLightbox={handleOpenLightbox}
+                                                            />
                                                         </div>
                                                         {msg.content && msg.content !== "Sent an image" && (
                                                             <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${isMe ? "bg-violet-600 text-white rounded-br-none" : "bg-white text-slate-800 rounded-bl-none border border-slate-200"
@@ -1087,6 +1115,17 @@ const Messages = () => {
                             }
                             return c;
                         }));
+                    }}
+                />
+            )}
+
+            {/* Modal Xem ảnh Fullscreen */}
+            {activeLightboxUrl && (
+                <ImageLightboxModal
+                    imageUrl={activeLightboxUrl}
+                    onClose={() => {
+                        URL.revokeObjectURL(activeLightboxUrl);
+                        setActiveLightboxUrl(null);
                     }}
                 />
             )}

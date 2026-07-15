@@ -72,9 +72,30 @@ async function proxyRequest(serviceName, baseUrl, req, res, targetPath) {
 
   return new Promise((resolve, reject) => {
     response.data.on('end', resolve);
-    response.data.on('error', reject);
+    response.data.on('error', (err) => {
+      if (err.message === 'aborted' || err.code === 'ECONNRESET' || req.aborted) {
+        return resolve();
+      }
+      reject(err);
+    });
+    res.on('finish', resolve);
+    res.on('close', resolve);
+    req.on('aborted', resolve);
   });
 }
+
+// Default options for circuit breakers
+const mediaBreakerOptions = {
+  ...breakerOptions,
+  timeout: parseInt(process.env.MEDIA_CIRCUIT_BREAKER_TIMEOUT, 10) || 60000, // 60s for media transfer
+  errorFilter: (err) => {
+    if (!err) return false;
+    const msg = String(err.message || '').toLowerCase();
+    const code = String(err.code || '').toLowerCase();
+    // Return true to ignore client-side cancellation/aborted requests
+    return msg.includes('aborted') || code.includes('econnreset') || code.includes('econnaborted');
+  }
+};
 
 // Circuit Breaker for User Service
 const userServiceBreaker = new CircuitBreaker(
@@ -85,7 +106,7 @@ const userServiceBreaker = new CircuitBreaker(
 // Create a Circuit Breaker for Media Service
 const mediaServiceBreaker = new CircuitBreaker(
   (req, res, targetPath) => proxyRequest('media-service', config.MEDIA_SERVICE_URL, req, res, targetPath),
-  breakerOptions
+  mediaBreakerOptions
 );
 
 // Create a Circuit Breaker for Post Service
@@ -113,10 +134,22 @@ const chatServiceBreaker = new CircuitBreaker(
 
 // Fallback handlers
 function handleFallback(serviceName, res, error) {
+  const isClientAbort = error && (
+    error.message === 'aborted' ||
+    error.code === 'ECONNRESET' ||
+    String(error.message).includes('aborted')
+  );
+
+  if (isClientAbort) {
+    if (!res.headersSent) {
+      res.destroy();
+    }
+    return;
+  }
+
   console.error(`[ERROR] Circuit Breaker Triggered or Error occurred for ${serviceName}:`, error.message);
 
   if (res.headersSent) {
-    console.warn(`[WARN] Headers already sent for ${serviceName}, destroying response stream to prevent crash.`);
     res.destroy();
     return;
   }

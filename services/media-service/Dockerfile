@@ -23,7 +23,7 @@ COPY --chown=node:node src ./src
 
 # 8. Set Node environment variables and limit V8 heap size to save RAM
 ENV NODE_ENV=production
-ENV NODE_OPTIONS="--max-old-space-size=128"
+ENV NODE_OPTIONS="--max-old-space-size=192"
 ENV PORT=5000
 
 # 9. Expose internal port

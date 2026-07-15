@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { minioService } from './minio.service.js';
+import { imageProcessingService } from './image-processing.service.js';
 import { Media } from '../models/media.model.js';
 import { config } from '../config/index.js';
 import { BadRequestError, NotFoundError, ForbiddenError } from '../utils/error.js';
@@ -17,9 +18,33 @@ export const mediaService = {
     }
 
     const ext = file.originalname.split('.').pop();
-    const objectKey = `${userId}/${uuidv4()}.${ext}`;
+    const baseId = uuidv4();
+    let objectKey = `${userId}/${baseId}.${ext}`;
+    const variants = new Map();
+    let compressedSize = file.size;
+    let outputFormat = null;
 
-    await minioService.uploadFile(objectKey, file.buffer, file.mimetype, file.size);
+    if (fileCategory === 'image' && file.mimetype !== 'image/gif') {
+      const processed = await imageProcessingService.processImage(file.buffer, file.mimetype);
+      if (processed) {
+        objectKey = `${userId}/${baseId}_original.webp`;
+        const variantEntries = [
+          { name: 'original', buffer: processed.original, key: objectKey },
+          { name: 'medium',   buffer: processed.medium,   key: `${userId}/${baseId}_medium.webp` },
+          { name: 'thumbnail',buffer: processed.thumbnail, key: `${userId}/${baseId}_thumbnail.webp` },
+        ];
+        for (const item of variantEntries) {
+          await minioService.uploadFile(item.key, item.buffer, 'image/webp', item.buffer.length);
+          variants.set(item.name, item.key);
+        }
+        compressedSize = processed.original.length + processed.medium.length + processed.thumbnail.length;
+        outputFormat = 'webp';
+      } else {
+        await minioService.uploadFile(objectKey, file.buffer, file.mimetype, file.size);
+      }
+    } else {
+      await minioService.uploadFile(objectKey, file.buffer, file.mimetype, file.size);
+    }
 
     const media = await Media.create({
       originalName: file.originalname,
@@ -27,6 +52,10 @@ export const mediaService = {
       size: file.size,
       objectKey: objectKey,
       uploadedBy: userId,
+      compressedSize,
+      compressionRatio: parseFloat((1 - compressedSize / file.size).toFixed(3)),
+      format: outputFormat,
+      variants,
     });
 
     return {
@@ -45,15 +74,42 @@ export const mediaService = {
     return media;
   },
 
-  getFileStream: async (id) => {
+  getFileStream: async (id, variant = 'medium') => {
     const media = await Media.findById(id);
     if (!media) throw new NotFoundError('Media not found');
 
-    const stream = await minioService.getFileStream(media.objectKey);
+    let targetKey = media.objectKey;
+    let targetMimeType = media.mimeType;
+
+    const getVariantKey = (vMap, key) => {
+      if (!vMap) return null;
+      if (typeof vMap.get === 'function') return vMap.get(key);
+      return vMap[key] || null;
+    };
+
+    const variantKey = getVariantKey(media.variants, variant) 
+      || getVariantKey(media.variants, 'medium') 
+      || getVariantKey(media.variants, 'original');
+
+    if (variantKey) {
+      targetKey = variantKey;
+      targetMimeType = 'image/webp';
+    }
+
+    // Lấy kích thước thực tế của file trong MinIO (không phải kích thước file gốc trước nén)
+    let actualSize = null;
+    try {
+      const stat = await minioService.statFile(targetKey);
+      actualSize = stat.size;
+    } catch (e) {
+      // Fallback: không set Content-Length nếu không lấy được stat
+    }
+
+    const stream = await minioService.getFileStream(targetKey);
     return {
       stream,
-      mimeType: media.mimeType,
-      size: media.size
+      mimeType: targetMimeType,
+      size: actualSize
     };
   },
 
