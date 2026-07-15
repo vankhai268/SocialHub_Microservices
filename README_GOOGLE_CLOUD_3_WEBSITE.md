@@ -20,6 +20,12 @@ gateway   LoadBalancer   10.8.12.155   35.221.161.252   8080:31252/TCP   5m
 ```
 👉 Lưu lại địa chỉ **`EXTERNAL-IP`** (ví dụ ở đây là `35.221.161.252`). Cổng kết nối công khai của Gateway được cấu hình là **`8080`**.
 
+> [!NOTE]
+> **External IP của Gateway có bị thay đổi không?**
+> * **KHÔNG thay đổi khi:** Bạn chạy lại Cloud Build hoặc các Pod trong cụm GKE bị khởi động lại (restart). IP này được gắn ở mức Kubernetes Service (`type: LoadBalancer`), do đó các Pod phía sau có bị tắt đi bật lại hoặc scale lên/xuống thì IP này vẫn được giữ nguyên.
+> * **SẼ thay đổi khi:** Bạn xóa cụm GKE đi và tạo lại (theo quy tắc tối ưu chi phí 0 USD khi nghỉ), hoặc khi bạn xóa Service `gateway` và apply lại (`kubectl delete svc gateway`).
+> * **Khắc phục khi IP đổi:** Bạn cần phải cập nhật lại IP này trong file `cloudbuild.yaml` (dòng 138 - biến `_VITE_API_URL`) hoặc qua cấu hình trigger trên GCP Console để frontend gọi API chính xác.
+
 ### 2. Các Endpoint Kiểm Thử Nhanh:
 
 *   **Kiểm tra kết nối API Gateway (Health Check)**:
@@ -34,9 +40,11 @@ gateway   LoadBalancer   10.8.12.155   35.221.161.252   8080:31252/TCP   5m
 *   **Kiểm thử đăng ký tài khoản (Đoạn này sẽ gọi tới user-service & ghi Postgres)**:
     ```bash
     curl -X POST -H "Content-Type: application/json" \
-      -d '{"username":"congtest","email":"congtest@gmail.com","password":"Password123"}' \
+      -d '{"name":"congtest","email":"congtest@gmail.com","password":"Password123"}' \
       http://<GATEWAY_EXTERNAL_IP>:8080/api/auth/register
     ```
+    *(Lưu ý: API Register của `user-service` yêu cầu trường **`name`** làm tên hiển thị, không dùng `username`)*
+
 *   **Kiểm thử đăng nhập (Lấy JWT Token)**:
     ```bash
     curl -X POST -H "Content-Type: application/json" \
@@ -109,7 +117,48 @@ frontend   LoadBalancer   10.8.5.210   34.80.125.99    80:30000/TCP   2m
 
 ---
 
-## 🛠️ PHẦN 4: Hướng Phát Triển Nâng Cao (Circuit Breakers & Load Balancing)
+## 🔄 PHẦN 4: Hướng Dẫn Cập Nhật IP Gateway Khi Dựng Lại Cụm GKE
+
+Khi bạn xóa cụm GKE để tiết kiệm chi phí (`gcloud container clusters delete ...`) và dựng lại sau đó, Google Cloud sẽ cấp phát một địa chỉ **External IP hoàn toàn mới** cho API Gateway. 
+
+Để Frontend kết nối chính xác tới Backend, bạn cần cập nhật IP mới này vào cấu hình theo một trong các phương pháp sau:
+
+### 1. Dành cho Frontend chạy trên GKE (Nginx)
+Bạn có hai lựa chọn để cập nhật:
+
+*   **Cách 1 (Nhanh nhất từ Cloud Shell)**: Chạy lệnh tự động đọc IP mới từ cụm GKE và kích hoạt build trực tiếp:
+    ```bash
+    # Lấy IP Gateway hiện tại trên cụm
+    GATEWAY_IP=$(kubectl get service gateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+    # Đẩy build và deploy trực tiếp với IP mới
+    gcloud builds submit . \
+        --config=cloudbuild.yaml \
+        --substitutions=_VITE_API_URL="http://${GATEWAY_IP}:8080"
+    ```
+*   **Cách 2 (Thông qua GitHub CI/CD Trigger)**: 
+    1. Mở file [cloudbuild.yaml](file:///d:/Hoc_tap_Project_complete/SocialHub_Microservices/cloudbuild.yaml#L138) ở máy local.
+    2. Đi xuống phần `substitutions:` cuối file và sửa giá trị `_VITE_API_URL` thành IP mới của bạn:
+       ```yaml
+       substitutions:
+         _VITE_API_URL: "http://<IP_GATEWAY_MỚI>:8080"
+       ```
+    3. Commit và `git push` lên GitHub để Trigger tự động build và deploy.
+
+---
+
+### 2. Dành cho Frontend chạy trên Vercel
+Nếu bạn đang chạy Frontend trên dịch vụ Vercel Serverless:
+
+1.  Đăng nhập vào [Vercel](https://vercel.com).
+2.  Mở dự án `socialhub-frontend` của bạn, di chuyển đến **Settings** -> **Environment Variables**.
+3.  Tìm biến **`VITE_API_URL`** và nhấn nút chỉnh sửa (Edit).
+4.  Thay đổi giá trị thành `http://<IP_GATEWAY_MỚI>:8080` rồi nhấn **Save**.
+5.  Để áp dụng thay đổi, bạn vào tab **Deployments**, nhấn vào nút dấu ba chấm `...` ở bản deploy gần nhất và chọn **Redeploy** (hoặc push một commit mới lên GitHub để Vercel tự động build lại).
+
+---
+
+## 🛠️ PHẦN 5: Hướng Phát Triển Nâng Cao (Circuit Breakers & Load Balancing)
 
 Khi bạn chạy Frontend bằng Nginx trực tiếp trong cụm GKE (Phần 3), bạn có thể dễ dàng mở rộng hạ tầng này trong tương lai:
 

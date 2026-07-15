@@ -135,5 +135,5 @@ options:
 
 # --- Cấu hình tham số truyền động từ Trigger GCP ---
 substitutions:
-  _VITE_API_URL: "http://35.221.161.252:8080" # Giá trị mặc định (Có thể ghi đè lúc chạy thủ công hoặc trên giao diện Trigger)
+  _VITE_API_URL: "http://35.234.51.122:8080" # Giá trị mặc định (Có thể ghi đè lúc chạy thủ công hoặc trên giao diện Trigger)
 
