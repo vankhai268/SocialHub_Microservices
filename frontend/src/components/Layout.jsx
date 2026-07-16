@@ -2,7 +2,7 @@ import {Outlet, Link, useNavigate, useLocation} from "react-router-dom";
 import {useAuth} from "../context/AuthContext";
 import {useSocket} from "../context/SocketContext";
 import ChatWidget from "./ChatWidget"; // <-- Import thêm ChatWidget
-import {Home, Users, User, LogOut, Bell, MessageSquare} from "lucide-react";
+import {Home, Users, User, LogOut, Bell, MessageSquare, Film} from "lucide-react";
 const Layout = () => {
     const { user, logout } = useAuth();
     const { unreadCount, toast, setToast } = useSocket();
@@ -98,6 +98,10 @@ const Layout = () => {
                         <Link to="/messages" className={navLinkClass("/messages")}>
                             <MessageSquare className={navIconClass("/messages")} />
                             <span>Tin nhắn</span>
+                        </Link>
+                        <Link to="/reels" className={navLinkClass("/reels")}>
+                            <Film className={navIconClass("/reels")} />
+                            <span>Reels</span>
                         </Link>
                         <Link to="/notifications" className={`${navLinkClass("/notifications")} justify-between`}>
                             <div className="flex items-center space-x-3">

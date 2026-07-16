@@ -1,0 +1,549 @@
+import { useState, useEffect, useRef } from "react";
+import { useAuth } from "../context/AuthContext";
+import api from "../services/api";
+import { 
+  Heart, 
+  MessageCircle, 
+  Share2, 
+  Volume2, 
+  VolumeX, 
+  Plus, 
+  Loader, 
+  Send, 
+  X,
+  MessageSquareCode
+} from "lucide-react";
+import CreateReelModal from "../components/CreateReelModal";
+import ShareModal from "../components/ShareModal";
+
+// Component con hiển thị từng Video Reel đơn lẻ
+const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenComments, onShare }) => {
+  const videoRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  const [videoSrc, setVideoSrc] = useState("");
+  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
+  const { user } = useAuth();
+
+  // Tải video dạng blob qua API để tự động đính kèm JWT Token và bypass headers
+  useEffect(() => {
+    const videoId = reel.media_ids?.[0];
+    if (!videoId) return;
+
+    let objectUrl = "";
+    setIsLoadingVideo(true);
+
+    const fetchVideoBlob = async () => {
+      try {
+        const res = await api.get(`/media/file/${videoId}`, { responseType: "blob" });
+        objectUrl = URL.createObjectURL(res.data);
+        setVideoSrc(objectUrl);
+      } catch (err) {
+        console.error(`❌ Lỗi tải video Reel ${videoId}:`, err.message);
+      } finally {
+        setIsLoadingVideo(false);
+      }
+    };
+
+    fetchVideoBlob();
+
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [reel.media_ids]);
+
+  // Tự động Play/Pause dựa trên active state từ IntersectionObserver
+  useEffect(() => {
+    if (!videoRef.current || !videoSrc) return;
+
+    if (isActive) {
+      // Khi active, thử phát video
+      videoRef.current.play()
+        .then(() => {
+          setIsPlaying(true);
+          // Tăng lượt xem video qua API
+          api.post(`/reels/${reel.id}/view`).catch(() => {});
+        })
+        .catch(err => {
+          console.log("❌ Trình duyệt chặn autoplay:", err.message);
+          setIsPlaying(false);
+        });
+    } else {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+      setIsPlaying(false);
+    }
+  }, [isActive, videoSrc, reel.id]);
+
+  // Click vào video để Play/Pause thủ công
+  const handleVideoClick = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false));
+    }
+  };
+
+  // Double Click để Thả tim nhanh giống Instagram
+  const handleDoubleClick = () => {
+    setShowHeartAnimation(true);
+    setTimeout(() => setShowHeartAnimation(false), 800);
+    if (!reel.isLikedByMe) {
+      onLikeToggle(reel.id);
+    }
+  };
+
+  return (
+    <div className="w-full h-full snap-start flex justify-center items-center bg-slate-950 relative border-b border-white/5 overflow-hidden">
+      {/* Video Phát chính */}
+      {isLoadingVideo ? (
+        <div className="flex-1 flex flex-col justify-center items-center text-slate-400 space-y-3 h-full max-w-[450px] bg-slate-950">
+          <Loader className="w-8 h-8 text-violet-500 animate-spin" />
+          <p className="text-[10px]">Đang tải video...</p>
+        </div>
+      ) : videoSrc ? (
+        <video
+          ref={videoRef}
+          src={videoSrc}
+          loop
+          muted={isMuted}
+          playsInline
+          onClick={handleVideoClick}
+          onDoubleClick={handleDoubleClick}
+          className="w-full h-full object-cover max-w-[450px]"
+        />
+      ) : (
+        <div className="text-slate-500 text-xs italic">Không tải được tệp video</div>
+      )}
+
+      {/* Hiệu ứng Trái tim đập khi Double Click */}
+      {showHeartAnimation && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 animate-ping">
+          <Heart className="w-24 h-24 text-red-500 fill-red-500 opacity-90 animate-bounce" />
+        </div>
+      )}
+
+      {/* Chỉ báo trạng thái Tạm dừng (Pause Icon Overlay) */}
+      {!isPlaying && videoSrc && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/10">
+          <div className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 scale-95 opacity-0 animate-fadeIn">
+            ▶
+          </div>
+        </div>
+      )}
+
+      {/* Nút bật/tắt tiếng âm thanh */}
+      <button
+        onClick={toggleMute}
+        className="absolute top-4 right-4 p-2.5 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white cursor-pointer z-10 transition duration-150"
+      >
+        {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+      </button>
+
+      {/* Phần thông tin tác giả và mô tả ở góc dưới bên trái */}
+      <div className="absolute bottom-4 left-4 right-16 text-left space-y-2 z-10 max-w-[80%] pointer-events-auto">
+        <div className="flex items-center space-x-2.5">
+          <img
+            src={reel.author?.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${reel.author_id}`}
+            className="w-9 h-9 rounded-full object-cover border border-white/20 shadow-md"
+            alt="Author Avatar"
+          />
+          <div>
+            <span className="font-bold text-sm text-white drop-shadow-md">{reel.author?.displayName || "Người dùng"}</span>
+            <span className="text-[10px] text-white/70 block drop-shadow-sm">{reel.view_count || 0} lượt xem</span>
+          </div>
+        </div>
+        {reel.content && (
+          <p className="text-xs text-white/90 leading-relaxed font-medium line-clamp-3 drop-shadow-md select-text">
+            {reel.content}
+          </p>
+        )}
+      </div>
+
+      {/* Cột các nút tương tác bên phải */}
+      <div className="absolute bottom-4 right-3 flex flex-col items-center space-y-5 z-10 pointer-events-auto">
+        {/* Nút Like (Heart) */}
+        <div className="flex flex-col items-center text-center space-y-1">
+          <button
+            onClick={() => onLikeToggle(reel.id)}
+            className={`p-3 rounded-full backdrop-blur-md border transition duration-300 cursor-pointer shadow-lg active:scale-90 ${
+              reel.isLikedByMe
+                ? "bg-red-500/90 text-white border-red-500"
+                : "bg-black/40 text-white border-white/10 hover:bg-black/60"
+            }`}
+          >
+            <Heart className={`w-5 h-5 ${reel.isLikedByMe ? "fill-white" : ""}`} />
+          </button>
+          <span className="text-[10px] font-bold text-white drop-shadow-md">{reel.like_count || 0}</span>
+        </div>
+
+        {/* Nút bình luận */}
+        <div className="flex flex-col items-center text-center space-y-1">
+          <button
+            onClick={() => onOpenComments(reel)}
+            className="p-3 rounded-full bg-black/40 backdrop-blur-md border border-white/10 hover:bg-black/60 text-white transition duration-300 cursor-pointer shadow-lg active:scale-90"
+          >
+            <MessageCircle className="w-5 h-5" />
+          </button>
+          <span className="text-[10px] font-bold text-white drop-shadow-md">{reel.comment_count || 0}</span>
+        </div>
+
+        {/* Nút chia sẻ */}
+        <div className="flex flex-col items-center text-center space-y-1">
+          <button
+            onClick={() => onShare(reel)}
+            className="p-3 rounded-full bg-black/40 backdrop-blur-md border border-white/10 hover:bg-black/60 text-white transition duration-300 cursor-pointer shadow-lg active:scale-90"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
+          <span className="text-[10px] font-bold text-white drop-shadow-md">{reel.share_count || 0}</span>
+        </div>
+      </div>
+
+      {/* Đáy sẫm màu để text dễ đọc */}
+      <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 to-transparent pointer-events-none z-0" />
+    </div>
+  );
+};
+
+// Component chính trang Reels
+const Reels = () => {
+  const [reels, setReels] = useState([]);
+  const [activeReelIndex, setActiveReelIndex] = useState(0);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
+  // Modals
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedSharePost, setSelectedSharePost] = useState(null);
+
+  // Drawer bình luận
+  const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
+  const [selectedCommentReel, setSelectedCommentReel] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [commentInput, setCommentInput] = useState("");
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  const containerRef = useRef(null);
+  const observerRef = useRef(null);
+
+  // Load danh sách Reels từ Backend
+  const fetchReels = async (currentPage) => {
+    try {
+      const res = await api.get(`/reels?page=${currentPage}&limit=5`);
+      if (res.data && res.data.success) {
+        const list = res.data.data || [];
+        if (list.length === 0) {
+          setHasMore(false);
+        } else {
+          setReels(prev => (currentPage === 1 ? list : [...prev, ...list]));
+        }
+      }
+    } catch (err) {
+      console.error("❌ Lỗi tải Reels:", err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReels(1);
+  }, []);
+
+  // Thiết lập IntersectionObserver theo dõi video nào đang hiển thị ở tâm viewport
+  useEffect(() => {
+    if (reels.length === 0) return;
+
+    const options = {
+      root: containerRef.current,
+      rootMargin: "0px",
+      threshold: 0.6 // Element phải hiển thị ít nhất 60% diện tích
+    };
+
+    observerRef.current = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const index = parseInt(entry.target.getAttribute("data-index"), 10);
+          setActiveReelIndex(index);
+
+          // Phân trang tự động: Nếu cuộn gần tới cuối danh sách, tải thêm Reels
+          if (index === reels.length - 2 && hasMore) {
+            setPage(prev => {
+              const nextPage = prev + 1;
+              fetchReels(nextPage);
+              return nextPage;
+            });
+          }
+        }
+      });
+    }, options);
+
+    // Gắn observer cho từng Reel container
+    const children = containerRef.current?.children;
+    if (children) {
+      Array.from(children).forEach(child => {
+        observerRef.current.observe(child);
+      });
+    }
+
+    return () => {
+      if (observerRef.current) observerRef.current.disconnect();
+    };
+  }, [reels, hasMore]);
+
+  // Xử lý Thả tim / Bỏ tim Reels
+  const handleLikeToggle = async (reelId) => {
+    // Cập nhật Optimistic UI cho mượt
+    setReels(prev => prev.map(r => {
+      if (r.id === reelId) {
+        const isLiked = !r.isLikedByMe;
+        return {
+          ...r,
+          isLikedByMe: isLiked,
+          like_count: isLiked ? (r.like_count || 0) + 1 : Math.max((r.like_count || 0) - 1, 0)
+        };
+      }
+      return r;
+    }));
+
+    try {
+      const targetReel = reels.find(r => r.id === reelId);
+      if (targetReel.isLikedByMe) {
+        // unlike
+        await api.delete(`/reels/${reelId}/like`);
+      } else {
+        // like
+        await api.post(`/reels/${reelId}/like`);
+      }
+    } catch (err) {
+      console.error("❌ Lỗi tương tác Like Reel:", err.message);
+      // Rollback nếu API lỗi
+      fetchReels(1);
+    }
+  };
+
+  // Mở ngăn kéo bình luận
+  const handleOpenComments = async (reel) => {
+    setSelectedCommentReel(reel);
+    setCommentDrawerOpen(true);
+    setComments([]);
+    
+    // Tải danh sách bình luận
+    try {
+      const res = await api.get(`/reels/${reel.id}/comments`);
+      if (res.data && res.data.success) {
+        setComments(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("❌ Lỗi tải bình luận:", err.message);
+    }
+  };
+
+  // Đăng bình luận mới
+  const handlePostComment = async (e) => {
+    e.preventDefault();
+    if (!commentInput.trim() || !selectedCommentReel || isSubmittingComment) return;
+
+    setIsSubmittingComment(true);
+    try {
+      const res = await api.post(`/reels/${selectedCommentReel.id}/comments`, {
+        content: commentInput.trim()
+      });
+
+      if (res.data && res.data.success) {
+        // Nạp comment mới vào list
+        setComments(prev => [...prev, res.data.data]);
+        setCommentInput("");
+        
+        // Cập nhật số đếm bình luận ở UI chính
+        setReels(prev => prev.map(r => {
+          if (r.id === selectedCommentReel.id) {
+            return { ...r, comment_count: (r.comment_count || 0) + 1 };
+          }
+          return r;
+        }));
+      }
+    } catch (err) {
+      console.error("❌ Lỗi tạo bình luận Reel:", err.message);
+      alert("Không thể đăng bình luận!");
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
+  // Mở modal chia sẻ
+  const handleShareClick = (reel) => {
+    // Do cấu trúc bài post chia sẻ tái sử dụng PostCard, ta map Reel thành Object Post tương ứng để ShareModal hoạt động
+    const mockPost = {
+      id: reel.id,
+      content: reel.content,
+      author: reel.author,
+      media_ids: reel.media_ids
+    };
+    setSelectedSharePost(mockPost);
+    setShowShareModal(true);
+  };
+
+  return (
+    <div className="w-full flex items-center justify-center min-h-[calc(100vh-6rem)] relative bg-slate-900 rounded-3xl overflow-hidden shadow-2xl py-3 border border-white/5 select-none">
+      
+      {/* Khung chứa các Video cuộn dọc */}
+      <div 
+        ref={containerRef}
+        className="w-full max-w-[420px] h-[78vh] snap-y snap-mandatory overflow-y-scroll scrollbar-none rounded-2xl border border-white/10 shadow-2xl relative bg-slate-950 flex flex-col"
+      >
+        {isLoading && reels.length === 0 ? (
+          <div className="flex-1 flex flex-col justify-center items-center text-slate-400 space-y-3">
+            <Loader className="w-8 h-8 text-violet-500 animate-spin" />
+            <p className="text-xs">Đang chuẩn bị thước phim...</p>
+          </div>
+        ) : reels.length > 0 ? (
+          reels.map((reel, index) => (
+            <div 
+              key={reel.id} 
+              data-index={index} 
+              className="w-full h-full shrink-0 snap-start"
+            >
+              <ReelItem
+                reel={reel}
+                isActive={index === activeReelIndex}
+                isMuted={isMuted}
+                toggleMute={() => setIsMuted(prev => !prev)}
+                onLikeToggle={handleLikeToggle}
+                onOpenComments={handleOpenComments}
+                onShare={handleShareClick}
+              />
+            </div>
+          ))
+        ) : (
+          <div className="flex-1 flex flex-col justify-center items-center text-slate-500 text-xs italic space-y-4 p-8 text-center">
+            <p>Chưa có Reels nào được đăng tải.</p>
+            <p>Hãy trở thành người đầu tiên chia sẻ thước phim ngắn của bạn!</p>
+          </div>
+        )}
+
+        {/* Ngăn kéo Bình luận (Comment Drawer) trượt lên từ dưới */}
+        {commentDrawerOpen && selectedCommentReel && (
+          <div className="absolute inset-x-0 bottom-0 h-[60%] bg-slate-900/95 backdrop-blur-md rounded-t-2xl z-20 flex flex-col border-t border-white/10 shadow-2xl animate-slideUp">
+            
+            {/* Header Drawer */}
+            <div className="flex justify-between items-center px-4 py-3 border-b border-white/10">
+              <span className="text-xs font-bold text-white flex items-center space-x-1.5">
+                <MessageSquareCode className="w-4 h-4 text-violet-500" />
+                <span>Bình luận ({selectedCommentReel.comment_count || 0})</span>
+              </span>
+              <button 
+                onClick={() => setCommentDrawerOpen(false)}
+                className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Danh sách bình luận */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3.5 select-text">
+              {comments.length > 0 ? (
+                comments.map((comment, i) => (
+                  <div key={comment.id || i} className="flex items-start space-x-2.5">
+                    <img 
+                      src={comment.author?.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${comment.author_id}`}
+                      className="w-7 h-7 rounded-full object-cover border border-white/10 mt-0.5"
+                      alt="Avatar"
+                    />
+                    <div className="flex-1 bg-white/5 border border-white/5 px-3 py-2 rounded-xl text-left">
+                      <span className="font-bold text-[10px] text-violet-400 block mb-0.5">{comment.author?.displayName || "Người dùng"}</span>
+                      <p className="text-xs text-slate-200 leading-normal whitespace-pre-wrap">{comment.content}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-500 text-[10px] italic">
+                  Chưa có bình luận nào. Hãy bình luận đầu tiên!
+                </div>
+              )}
+            </div>
+
+            {/* Ô gõ bình luận chân Drawer */}
+            <form onSubmit={handlePostComment} className="p-3 border-t border-white/10 flex items-center space-x-2">
+              <input
+                type="text"
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
+                placeholder="Nói gì đó về thước phim này..."
+                disabled={isSubmittingComment}
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-550 focus:outline-none focus:border-violet-500 transition disabled:opacity-50"
+              />
+              <button 
+                type="submit"
+                disabled={isSubmittingComment || !commentInput.trim()}
+                className="p-2.5 bg-violet-600 disabled:opacity-50 hover:bg-violet-750 text-white rounded-xl cursor-pointer transition active:scale-95 shadow-md shadow-violet-600/10"
+              >
+                {isSubmittingComment ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+
+      {/* Nút "Tạo Reels" nổi bay bổng bên cạnh phải màn hình */}
+      <div className="absolute top-6 right-6 z-10 pointer-events-auto">
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center space-x-1.5 px-4.5 py-2.5 bg-gradient-to-r from-violet-600 to-pink-600 hover:opacity-90 active:scale-95 text-white font-bold rounded-full text-xs shadow-lg shadow-violet-500/20 cursor-pointer transition duration-150"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Tạo Reels</span>
+        </button>
+      </div>
+
+      {/* Modals hỗ trợ đăng Reels và Chia sẻ */}
+      {showCreateModal && (
+        <CreateReelModal
+          onClose={() => setShowCreateModal(false)}
+          onUploadSuccess={() => {
+            setShowCreateModal(false);
+            setIsLoading(true);
+            setPage(1);
+            fetchReels(1); // Load lại feed
+          }}
+        />
+      )}
+
+      {showShareModal && selectedSharePost && (
+        <ShareModal
+          post={selectedSharePost}
+          onClose={() => {
+            setShowShareModal(false);
+            setSelectedSharePost(null);
+          }}
+          onShareSuccess={() => {
+            setShowShareModal(false);
+            setSelectedSharePost(null);
+            // Cập nhật số lượt share tăng lên 1 trên UI
+            setReels(prev => prev.map(r => {
+              if (r.id === selectedSharePost.id) {
+                return { ...r, share_count: (r.share_count || 0) + 1 };
+              }
+              return r;
+            }));
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default Reels;

@@ -12,6 +12,7 @@ import Friends from "./pages/Friends";
 import Notifications from "./pages/Notifications";
 import Messages from "./pages/Messages";
 import PostDetail from "./pages/PostDetail";
+import Reels from "./pages/Reels";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
               <Route path="/messages" element={<Messages />} />
               <Route path="/profile/:id" element={<Profile />} />
               <Route path="/post/:id" element={<PostDetail />} />
+              <Route path="/reels" element={<Reels />} />
             </Route>
           </Route>
 

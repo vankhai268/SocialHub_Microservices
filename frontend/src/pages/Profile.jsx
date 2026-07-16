@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import PostCard from "../components/PostCard";
 import { useAuth } from "../context/AuthContext";
-import { Loader, Calendar, Mail, FileText, UserPlus, UserCheck, UserMinus, MessageSquare, Edit3, Camera, Save, X } from "lucide-react";
+import { Loader, Calendar, Mail, FileText, UserPlus, UserCheck, UserMinus, MessageSquare, Edit3, Camera, Save, X, Film } from "lucide-react";
 import imageCompression from "browser-image-compression";
 
 // Modal chỉnh sửa profile
@@ -187,12 +187,77 @@ const EditProfileModal = ({ profileUser, onClose, onProfileUpdated }) => {
     );
 };
 
+const ReelThumbnail = ({ reel, onClick }) => {
+    const [videoSrc, setVideoSrc] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        const videoId = reel.media_ids?.[0];
+        if (!videoId) return;
+
+        let objectUrl = "";
+        setIsLoading(true);
+
+        const fetchThumbnailBlob = async () => {
+            try {
+                const res = await api.get(`/media/file/${videoId}`, { responseType: "blob" });
+                objectUrl = URL.createObjectURL(res.data);
+                setVideoSrc(objectUrl);
+            } catch (err) {
+                console.error("❌ Lỗi tải thumbnail reel:", err.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchThumbnailBlob();
+
+        return () => {
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
+    }, [reel.media_ids]);
+
+    return (
+        <div 
+            onClick={onClick}
+            className="relative aspect-[9/16] rounded-2xl overflow-hidden bg-slate-950 border border-slate-200 shadow-sm group cursor-pointer hover:scale-[1.01] hover:shadow-md transition duration-200"
+        >
+            {isLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60">
+                    <Loader className="w-5 h-5 text-blue-500 animate-spin" />
+                </div>
+            ) : videoSrc ? (
+                <video 
+                    src={videoSrc} 
+                    muted 
+                    playsInline 
+                    className="w-full h-full object-cover animate-fadeIn" 
+                />
+            ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-500 text-[10px] italic">
+                    Lỗi tải video
+                </div>
+            )}
+            {/* Overlay số lượt xem */}
+            <div className="absolute bottom-2.5 left-2.5 flex items-center space-x-1 bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-full text-white text-[10px] font-bold select-none">
+                <span>▶</span>
+                <span>{reel.view_count || 0}</span>
+            </div>
+        </div>
+    );
+};
+
 const Profile = () => {
     const { id } = useParams(); // Lấy ID người dùng từ thanh địa chỉ /profile/:id
+    const navigate = useNavigate();
     const { user: loggedInUser, setUser } = useAuth();
 
     const [profileUser, setProfileUser] = useState(null);
     const [userPosts, setUserPosts] = useState([]);
+    const [userReels, setUserReels] = useState([]);
+    const [activeTab, setActiveTab] = useState("posts"); // "posts" | "reels"
     const [isLoading, setIsLoading] = useState(true);
     const [relation, setRelation] = useState({ status: "none", requestId: null });
     const [showEditModal, setShowEditModal] = useState(false);
@@ -278,7 +343,13 @@ const Profile = () => {
                     setUserPosts(postsRes.data.data || []);
                 }
 
-                // 3. Nếu không phải trang cá nhân của mình, kiểm tra thêm trạng thái kết bạn
+                // 3. Lấy danh sách thước phim của User từ post-service
+                const reelsRes = await api.get(`/reels/user/${id}`);
+                if (reelsRes.data && reelsRes.data.success) {
+                    setUserReels(reelsRes.data.data || []);
+                }
+
+                // 4. Nếu không phải trang cá nhân của mình, kiểm tra thêm trạng thái kết bạn
                 if (loggedInUser && loggedInUser.id !== id) {
                     const relRes = await api.get(`/friends/check/${id}`);
                     setRelation({
@@ -421,46 +492,84 @@ const Profile = () => {
                 </div>
             </div>
 
-            {/* Khu vực danh sách bài đăng */}
-            <div className="space-y-6">
-                <div className="flex items-center space-x-2 text-slate-800 border-b border-slate-200 pb-3">
-                    <FileText className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-xl font-bold">Bài đăng của {isOwnProfile ? "bạn" : profileUser.displayName}</h3>
-                    <span className="bg-slate-100 px-2.5 py-0.5 rounded-full text-xs font-semibold text-slate-600">{userPosts.length}</span>
-                </div>
-
-                {userPosts.length > 0 ? (
-                    <div className="space-y-6">
-                        {userPosts.map((post) => {
-                            const handlePostShared = (newSharedPost) => {
-                                if (isOwnProfile) {
-                                    setUserPosts(prev => [newSharedPost, ...prev]);
-                                }
-                            };
-                            const handlePostDeleted = (deletedPostId) => {
-                                setUserPosts(prev => prev.filter(p => p.id !== deletedPostId));
-                            };
-                            const handlePostUpdated = (updatedPost) => {
-                                setUserPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p));
-                            };
-                            return (
-                                <PostCard 
-                                    key={post.id} 
-                                    post={post} 
-                                    currentUserId={loggedInUser?.id} 
-                                    onPostShared={handlePostShared} 
-                                    onPostDeleted={handlePostDeleted} 
-                                    onPostUpdated={handlePostUpdated}
-                                />
-                            );
-                        })}
-                    </div>
-                ) : (
-                    <div className="text-center py-12 bg-white border border-slate-200 rounded-2xl text-slate-550 shadow-sm">
-                        Chưa đăng tải bài viết nào.
-                    </div>
-                )}
+            {/* Thanh chuyển đổi Tab Bài viết / Reels */}
+            <div className="flex border-b border-slate-200 select-none">
+                <button
+                    onClick={() => setActiveTab("posts")}
+                    className={`flex items-center space-x-2 px-6 py-3 font-semibold text-xs uppercase tracking-wider transition border-b-2 cursor-pointer ${
+                        activeTab === "posts"
+                            ? "border-blue-600 text-blue-600 animate-fadeIn"
+                            : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
+                >
+                    <FileText className="w-4 h-4" />
+                    <span>Bài đăng ({userPosts.length})</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab("reels")}
+                    className={`flex items-center space-x-2 px-6 py-3 font-semibold text-xs uppercase tracking-wider transition border-b-2 cursor-pointer ${
+                        activeTab === "reels"
+                            ? "border-blue-600 text-blue-600 animate-fadeIn"
+                            : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
+                >
+                    <Film className="w-4 h-4" />
+                    <span>Thước phim ({userReels.length})</span>
+                </button>
             </div>
+
+            {/* Khung nội dung tương ứng Tab được chọn */}
+            {activeTab === "posts" ? (
+                <div className="space-y-6">
+                    {userPosts.length > 0 ? (
+                        <div className="space-y-6 animate-fadeIn">
+                            {userPosts.map((post) => {
+                                const handlePostShared = (newSharedPost) => {
+                                    if (isOwnProfile) {
+                                        setUserPosts(prev => [newSharedPost, ...prev]);
+                                    }
+                                };
+                                const handlePostDeleted = (deletedPostId) => {
+                                    setUserPosts(prev => prev.filter(p => p.id !== deletedPostId));
+                                };
+                                const handlePostUpdated = (updatedPost) => {
+                                    setUserPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p));
+                                };
+                                return (
+                                    <PostCard 
+                                        key={post.id} 
+                                        post={post} 
+                                        currentUserId={loggedInUser?.id} 
+                                        onPostShared={handlePostShared} 
+                                        onPostDeleted={handlePostDeleted} 
+                                        onPostUpdated={handlePostUpdated}
+                                    />
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="text-center py-12 bg-white border border-slate-200 rounded-2xl text-slate-500 shadow-sm text-xs italic animate-fadeIn">
+                            Chưa đăng tải bài viết nào.
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="grid grid-cols-3 gap-3 animate-fadeIn">
+                    {userReels.length > 0 ? (
+                        userReels.map((reel) => (
+                            <ReelThumbnail 
+                                key={reel.id} 
+                                reel={reel} 
+                                onClick={() => navigate("/reels")} 
+                            />
+                        ))
+                    ) : (
+                        <div className="col-span-3 text-center py-12 bg-white border border-slate-200 rounded-2xl text-slate-500 shadow-sm text-xs italic">
+                            Chưa đăng thước phim nào.
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Modal chỉnh sửa trang cá nhân */}
             {showEditModal && (
