@@ -96,6 +96,41 @@ Dù đã tối ưu log, việc duy trì cụm GKE khi không làm việc vẫn l
 
 ---
 
+## 🔒 Khóa Vùng Lưu Trữ Logs (Data Residency) Tại asia-east1
+
+Mặc định khi chạy trên GKE, GCP Cloud Logging sẽ lưu trữ logs của bạn tại vị trí `global`. Nếu bạn muốn đảm bảo toàn bộ dữ liệu log được lưu trữ vật lý duy nhất tại vùng **`asia-east1`** (Đài Loan) để đáp ứng yêu cầu bảo mật, chủ quyền dữ liệu (Data Residency) và quản lý tập trung:
+
+### Bước 1: Tạo Log Bucket tại vùng `asia-east1`
+Mở Cloud Shell và chạy lệnh dưới đây để tạo một Log Bucket mới có thời gian lưu trữ (retention) là 30 ngày:
+```bash
+gcloud logging buckets create socialhub-gke-logs-bucket \
+    --location=asia-east1 \
+    --retention-days=30 \
+    --description="Lưu trữ logs GKE duy nhất tại vùng asia-east1"
+```
+
+### Bước 2: Tạo Log Router Sink để định tuyến log GKE về bucket mới
+Tạo một Sink định tuyến để chuyển toàn bộ logs Kubernetes (containers, nodes, cluster) về Log Bucket ở `asia-east1` vừa tạo:
+```bash
+# Thay [PROJECT_ID] bằng ID dự án GCP thực tế của bạn
+gcloud logging sinks create gke-asia-east1-sink \
+    logging.googleapis.com/projects/socialhub-micro-service-1/locations/asia-east1/buckets/socialhub-gke-logs-bucket \
+    --log-filter='resource.type="k8s_container" OR resource.type="k8s_node" OR resource.type="k8s_cluster"' \
+    --description="Chuyển hướng toàn bộ log GKE về vùng asia-east1"
+```
+
+### Bước 3: Loại trừ log GKE khỏi Sink mặc định `_Default` để tránh bị tính phí trùng lặp
+Để tránh logs bị nhân đôi ở cả bucket `global` mặc định và bucket `asia-east1` mới (gây tốn gấp đôi chi phí):
+1. Truy cập **GCP Console** -> **Logging** -> **Log Router**.
+2. Tìm sink tên là `_Default` -> Chọn **Edit sink**.
+3. Tại phần **Exclusion filters** (Bộ lọc loại trừ), nhấn **Add Exclusion** và điền:
+   - **Filter Name**: `Exclude_GKE_logs`
+   - **Filter**: `resource.type="k8s_container" OR resource.type="k8s_node" OR resource.type="k8s_cluster"`
+4. Lưu cấu hình (Save).
+
+---
+
+
 ## 📈 PHẦN 2: Giám Sát Cụm GKE Với Google Cloud Managed Service for Prometheus (GMP)
 
 Google Cloud cung cấp dịch vụ quản lý Prometheus hoàn toàn tự động tích hợp sẵn trên GKE Autopilot (**Google Cloud Managed Service for Prometheus - GMP**). Dịch vụ này giúp thu thập metrics hệ thống mà không cần tự duy trì hạ tầng Prometheus server phức tạp.

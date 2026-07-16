@@ -12,6 +12,8 @@ Sau khi toàn bộ 9 Pod đã ở trạng thái `Running`, API Gateway là cửa
 Chạy lệnh sau trên Cloud Shell:
 ```bash
 kubectl get service gateway -n default
+
+kubectl get services -n default
 ```
 *Kết quả mẫu:*
 ```bash
