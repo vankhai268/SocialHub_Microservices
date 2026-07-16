@@ -384,6 +384,6 @@ Khi kết thúc ngày làm việc hoặc khi không kiểm thử, hãy hạ số
     ```
 *   **Bật lại hệ thống khi tiếp tục code (Nâng lên 1)**:
     ```bash
-    kubectl scale deployment gateway user-service friend-service post-service media-service notification-service chat-service rabbitmq redis --replicas=1 -n default
+    kubectl scale deployment frontend gateway user-service friend-service post-service media-service notification-service chat-service rabbitmq redis --replicas=1 -n default
     ```
 

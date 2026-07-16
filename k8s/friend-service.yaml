@@ -77,6 +77,11 @@ spec:
             secretKeyRef:
               name: socialhub-secrets
               key: JWT_SECRET
+        - name: USER_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: socialhub-config
+              key: USER_SERVICE_URL
 
 ---
 apiVersion: v1
