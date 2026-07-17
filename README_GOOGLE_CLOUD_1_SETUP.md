@@ -426,29 +426,6 @@ gcloud projects add-iam-policy-binding socialhub-micro-service-1 \
 
 ---
 
-## 🔐 Bước 7: Tạo Và Cấu Hình Khóa Bảo Mật (Secret Manager)
-
-Tránh lưu các thông tin nhạy cảm như mật khẩu database, JWT_SECRET trực tiếp trong code:
-
-1.  **Tạo khóa bí mật cho JWT**:
-    ```bash
-    # Khởi tạo Secret
-    gcloud secrets create socialhub-jwt-secret --replication-policy="automatic"
-    
-    # Ghi đè giá trị bí mật
-    echo -n "congdaojwttoken123" | gcloud secrets versions add socialhub-jwt-secret --data-file=-
-    ```
-2.  **Tạo mật khẩu cơ sở dữ liệu Postgres**:
-    ```bash
-    # Khởi tạo Secret
-    gcloud secrets create socialhub-db-password --replication-policy="automatic"
-    
-    # Ghi đè giá trị mật khẩu Postgres
-    echo -n "socialhub_secret" | gcloud secrets versions add socialhub-db-password --data-file=-
-    ```
-
----
-
 ## 🚀 Hoàn Tất Thiết Lập!
 Hạ tầng GCP của bạn đã sẵn sàng. Bước tiếp theo là cấu hình tệp pipeline `cloudbuild.yaml` trong mã nguồn và chạy lệnh kích hoạt build tự động để đẩy ứng dụng lên đám mây Google!
 
