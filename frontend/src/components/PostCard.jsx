@@ -177,11 +177,16 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
     // 2. Lấy thông tin bài gốc nhúng nếu là bài được chia sẻ (is_shared = true)
     useEffect(() => {
         const fetchOriginalPost = async () => {
-            if (post.is_shared && post.original_post_id) {
+            if (post.is_shared && (post.original_post_id || post.original_reel_id)) {
                 setIsLoadingOriginal(true);
                 try {
-                    const res = await api.get(`/posts/${post.original_post_id}`);
-                    if (res.data && res.data.success) {
+                    let res;
+                    if (post.original_post_id) {
+                        res = await api.get(`/posts/${post.original_post_id}`);
+                    } else if (post.original_reel_id) {
+                        res = await api.get(`/reels/${post.original_reel_id}`);
+                    }
+                    if (res && res.data && res.data.success) {
                         setOriginalPost(res.data.data);
                     }
                 } catch (error) {
@@ -192,7 +197,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
             }
         };
         fetchOriginalPost();
-    }, [post.is_shared, post.original_post_id]);
+    }, [post.is_shared, post.original_post_id, post.original_reel_id]);
 
     // 2b. Tải tất cả Media (Ảnh & Video) của bài viết gốc
     useEffect(() => {
@@ -430,7 +435,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
             )}
 
             {/* Nếu là bài chia sẻ, hiển thị bài gốc nhúng lồng bên trong (Nested Card) */}
-            {post.is_shared && post.original_post_id && (
+            {post.is_shared && (post.original_post_id || post.original_reel_id) && (
                 <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 mb-4 space-y-3 hover:border-blue-500/30 transition">
                     {isLoadingOriginal ? (
                         <div className="flex justify-center py-4">
