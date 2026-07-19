@@ -86,5 +86,54 @@ export const postRepository = {
         visibility: visibility || 'friends'
       }
     });
+  },
+
+  createReel: async ({ authorId, caption, mediaId }) => {
+    return await prisma.post.create({
+      data: {
+        author_id: authorId,
+        content: caption || '',
+        media_ids: mediaId ? [mediaId] : [],
+        type: 'reel',
+        visibility: 'public'
+      }
+    });
+  },
+
+  findReelsFeed: async (limit, offset) => {
+    return await prisma.post.findMany({
+      where: { type: 'reel' },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: offset
+    });
+  },
+
+  countReelsFeed: async () => {
+    return await prisma.post.count({
+      where: { type: 'reel' }
+    });
+  },
+
+  findReelsByAuthorId: async (authorId, limit, offset) => {
+    return await prisma.post.findMany({
+      where: { author_id: authorId, type: 'reel' },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: offset
+    });
+  },
+
+  countReelsByAuthorId: async (authorId) => {
+    return await prisma.post.count({
+      where: { author_id: authorId, type: 'reel' }
+    });
+  },
+
+  incrementViewCount: async (id) => {
+    return await prisma.post.update({
+      where: { id },
+      data: { view_count: { increment: 1 } }
+    });
   }
 };

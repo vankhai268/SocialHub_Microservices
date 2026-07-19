@@ -5,6 +5,7 @@ import * as FeedController from '../controllers/feed.controller.js';
 import * as LikeController from '../controllers/like.controller.js';
 import * as CommentController from '../controllers/comment.controller.js';
 import * as ShareController from '../controllers/share.controller.js';
+import * as ReelController from '../controllers/reel.controller.js';
 
 const router = express.Router();
 
@@ -37,5 +38,17 @@ router.delete('/posts/:postId/comments/:commentId', CommentController.deleteComm
 
 // Share
 router.post('/posts/:id/share', ShareController.sharePost);
+
+// Reels
+router.post('/reels', ReelController.createReel);
+router.get('/reels', ReelController.getReelsFeed);
+router.post('/reels/:id/view', ReelController.incrementViewCount);
+router.get('/reels/user/:userId', ReelController.getUserReels);
+
+// Reels Likes & Comments (Re-use post interactions directly)
+router.post('/reels/:id/like', LikeController.likePost);
+router.delete('/reels/:id/like', LikeController.unlikePost);
+router.get('/reels/:id/comments', CommentController.getPostComments);
+router.post('/reels/:id/comments', CommentController.createComment);
 
 export default router;
