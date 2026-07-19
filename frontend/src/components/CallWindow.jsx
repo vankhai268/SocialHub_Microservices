@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Maximize2, Minimize2 } from "lucide-react";
+import api from "../services/api";
 
 // Cấu hình ICE Servers cho WebRTC.
 // TRÊN PRODUCTION: Để vượt qua tường lửa đối xứng (Symmetric NAT) của 3G/4G/5G hoặc wifi công ty,
@@ -9,14 +10,12 @@ const ICE_SERVERS = {
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
-        // Cấu hình mẫu TURN Server (bỏ comment và điền thông tin khi deploy thực tế):
-        /*
+        // Cấu hình TURN server vừa deploy trên Google Cloud
         {
-            urls: "turn:your-turn-server.com:3478",
-            username: "your-username",
-            credential: "your-password"
+            urls: import.meta.env.VITE_TURN_URL || "turn:turn.yourdomain.com:3478",
+            username: import.meta.env.VITE_TURN_USERNAME || "socialhub_user",
+            credential: import.meta.env.VITE_TURN_CREDENTIAL || "socialhub_secret_pass"
         }
-        */
     ]
 };
 
@@ -105,8 +104,20 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
 
         const setupWebRTC = async () => {
             try {
+                // Tải cấu hình ICE/TURN động từ chat-service qua Gateway
+                let serversConfig = ICE_SERVERS;
+                try {
+                    const res = await api.get("/conversations/ice-servers");
+                    if (res.data && res.data.success && res.data.data.iceServers) {
+                        serversConfig = { iceServers: res.data.data.iceServers };
+                        console.log("📡 [WEBRTC] Tải thành công ICE Servers động từ backend.");
+                    }
+                } catch (apiErr) {
+                    console.warn("⚠️ [WEBRTC] Không thể tải ICE Servers động, sử dụng fallback mặc định:", apiErr);
+                }
+
                 // 1. Khởi tạo RTCPeerConnection
-                const pc = new RTCPeerConnection(ICE_SERVERS);
+                const pc = new RTCPeerConnection(serversConfig);
                 peerConnectionRef.current = pc;
 
                 // 2. Lắng nghe luồng remote từ đối phương
@@ -118,13 +129,13 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
                             remoteVideoRef.current.srcObject = remoteStream;
                             remoteVideoRef.current.muted = false;
                             remoteVideoRef.current.volume = 1.0;
-                            remoteVideoRef.current.play().catch(() => {});
+                            remoteVideoRef.current.play().catch(() => { });
                         }
                         if (remoteAudioRef.current) {
                             remoteAudioRef.current.srcObject = remoteStream;
                             remoteAudioRef.current.muted = false;
                             remoteAudioRef.current.volume = 1.0;
-                            remoteAudioRef.current.play().catch(() => {});
+                            remoteAudioRef.current.play().catch(() => { });
                         }
                     }
                     setCallStatus("connected");
@@ -356,14 +367,13 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
 
     return (
         <div
-            className={`fixed z-50 transition-all duration-300 ${
-                isMinimized
-                    ? "bottom-4 right-4 w-72 h-44 rounded-2xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-900"
-                    : "inset-0 bg-slate-950/95 flex items-center justify-center p-4"
-            }`}
+            className={`fixed z-50 transition-all duration-300 ${isMinimized
+                ? "bottom-4 right-4 w-72 h-44 rounded-2xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-900"
+                : "inset-0 bg-slate-950/95 flex items-center justify-center p-4"
+                }`}
         >
             <div className={`relative w-full h-full bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden flex flex-col justify-between shadow-2xl ${isMinimized ? '' : 'max-w-4xl max-h-[85vh]'}`}>
-                
+
                 {/* Header thanh công cụ (Tên đối phương + Thời lượng) */}
                 <div className="absolute top-0 inset-x-0 p-4 z-20 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
                     <div className="flex items-center space-x-3">
@@ -442,9 +452,8 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
                         {/* Micro Toggle */}
                         <button
                             onClick={toggleMute}
-                            className={`p-4 rounded-full border transition cursor-pointer ${
-                                isMuted ? "bg-rose-600 border-rose-500 text-white" : "bg-slate-800 hover:bg-slate-700 border-slate-600 text-white"
-                            }`}
+                            className={`p-4 rounded-full border transition cursor-pointer ${isMuted ? "bg-rose-600 border-rose-500 text-white" : "bg-slate-800 hover:bg-slate-700 border-slate-600 text-white"
+                                }`}
                             title={isMuted ? "Bật Micro" : "Tắt Micro"}
                         >
                             {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
@@ -463,9 +472,8 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
                         {callType === "video" && (
                             <button
                                 onClick={toggleVideo}
-                                className={`p-4 rounded-full border transition cursor-pointer ${
-                                    isVideoOff ? "bg-rose-600 border-rose-500 text-white" : "bg-slate-800 hover:bg-slate-700 border-slate-600 text-white"
-                                }`}
+                                className={`p-4 rounded-full border transition cursor-pointer ${isVideoOff ? "bg-rose-600 border-rose-500 text-white" : "bg-slate-800 hover:bg-slate-700 border-slate-600 text-white"
+                                    }`}
                                 title={isVideoOff ? "Bật Camera" : "Tắt Camera"}
                             >
                                 {isVideoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}

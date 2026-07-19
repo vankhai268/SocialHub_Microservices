@@ -62,6 +62,21 @@ spec:
             configMapKeyRef:
               name: socialhub-config
               key: MEDIA_SERVICE_URL
+        - name: TURN_URL
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: TURN_URL
+        - name: TURN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: TURN_USERNAME
+        - name: TURN_CREDENTIAL
+          valueFrom:
+            secretKeyRef:
+              name: socialhub-secrets
+              key: TURN_CREDENTIAL
 
 ---
 apiVersion: v1

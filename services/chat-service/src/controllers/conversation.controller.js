@@ -83,3 +83,25 @@ export const deleteConversation = async (req, res) => {
     return handleError(res, error, 'Delete Conversation Error');
   }
 };
+
+/**
+ * GET /conversations/ice-servers
+ */
+export const getIceServers = async (req, res) => {
+  try {
+    return successResponse(res, 200, {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        {
+          urls: process.env.TURN_URL || "turn:turn.yourdomain.com:3478",
+          username: process.env.TURN_USERNAME || "socialhub_user",
+          credential: process.env.TURN_CREDENTIAL || "socialhub_secret_pass"
+        }
+      ]
+    });
+  } catch (error) {
+    return handleError(res, error, 'Get ICE Servers Error');
+  }
+};

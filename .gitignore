@@ -114,5 +114,6 @@ test-results/
 # Kubernetes Secrets (Bảo mật thông tin nhạy cảm)
 # ==============================
 k8s/secrets.yaml
+k8s/turnserver.conf
 
 cloudfare/
