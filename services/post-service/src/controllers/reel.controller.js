@@ -301,3 +301,38 @@ export const createReelComment = async (req, res) => {
     return handleError(res, error, 'Create Reel Comment Error');
   }
 };
+
+// 9. Lấy chi tiết Reel theo ID
+export const getReelById = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const token = req.headers.authorization;
+    const currentUserId = req.user.id;
+
+    const reel = await prisma.reel.findUnique({ where: { id } });
+    if (!reel) {
+      return errorResponse(res, 404, 'Reel not found');
+    }
+
+    const author = await getUserProfile(reel.author_id, token);
+    
+    // Kiểm tra xem user hiện tại đã like reel này chưa
+    const like = await prisma.reelLike.findUnique({
+      where: {
+        reel_id_user_id: {
+          reel_id: reel.id,
+          user_id: currentUserId
+        }
+      }
+    });
+
+    return successResponse(res, 200, {
+      ...reel,
+      author,
+      isLikedByMe: !!like
+    });
+  } catch (error) {
+    return handleError(res, error, 'Get Reel By Id Error');
+  }
+};
+
