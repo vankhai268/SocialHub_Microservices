@@ -11,6 +11,7 @@ router.post('/reels', ReelController.createReel);
 router.get('/reels', ReelController.getReels);
 router.get('/reels/user/:userId', ReelController.getUserReels);
 router.post('/reels/:id/view', ReelController.incrementReelView);
+router.get('/reels/:id', ReelController.getReelById);
 
 // Thả tim Reels
 router.post('/reels/:id/like', ReelController.likeReel);

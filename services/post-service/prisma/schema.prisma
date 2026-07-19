@@ -15,6 +15,7 @@ model Post {
   visibility       String?   @default("friends") @db.VarChar(20)
   is_shared        Boolean?  @default(false)
   original_post_id String?   @db.Uuid
+  original_reel_id String?   @db.Uuid
   like_count       Int?      @default(0)
   comment_count    Int?      @default(0)
   share_count      Int?      @default(0)
@@ -24,6 +25,7 @@ model Post {
   // Relations
   original_post    Post?     @relation("SharedPosts", fields: [original_post_id], references: [id])
   shared_posts     Post[]    @relation("SharedPosts")
+  original_reel    Reel?     @relation("SharedReels", fields: [original_reel_id], references: [id], onDelete: SetNull)
   likes            Like[]
   comments         Comment[]
 
@@ -72,6 +74,7 @@ model Reel {
   
   likes            ReelLike[]
   comments         ReelComment[]
+  shared_posts     Post[]         @relation("SharedReels")
 
   @@index([author_id], map: "idx_reels_author_id")
   @@index([created_at(sort: Desc)], map: "idx_reels_created_at")
