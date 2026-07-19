@@ -14,6 +14,7 @@ import {
     Send,
     Image as ImageIcon,
     Video,
+    Phone,
     Users,
     X,
     Loader,
@@ -36,7 +37,7 @@ const formatLastMessagePreview = (lastMsg) => {
 const Messages = () => {
     const {user: currentUser} = useAuth();
     const navigate = useNavigate();
-    const {onlineUsers, chatSocket} = useSocket();
+    const {onlineUsers, chatSocket, initiateCall} = useSocket();
 
     const [conversations, setConversations] = useState([]);
     const [selectedConv, setSelectedConv] = useState(null);
@@ -557,15 +558,65 @@ const Messages = () => {
                                         </div>
                                     </div>
 
-                                    {isGroup && (
+                                    <div className="flex items-center space-x-2">
                                         <button
-                                            onClick={handleOpenMembersModal}
-                                            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-650 hover:text-blue-600 rounded-xl text-xs font-semibold cursor-pointer transition shadow-sm"
+                                            onClick={() => {
+                                                const cId = selectedConv._id || selectedConv.id;
+                                                const other = selectedConv.participants?.find(p => p.userId !== currentUser.id);
+                                                initiateCall(
+                                                    isGroup ? {
+                                                        id: selectedConv.groupRef?._id || cId,
+                                                        displayName: title,
+                                                        avatarUrl: avatar,
+                                                        isGroup: true,
+                                                        groupId: selectedConv.groupRef?._id || cId,
+                                                        targetUserIds: selectedConv.participants?.map(p => p.userId).filter(id => String(id) !== String(currentUser.id)) || []
+                                                    } : {
+                                                        id: other?.userId,
+                                                        displayName: other?.displayName,
+                                                        avatarUrl: other?.avatarUrl
+                                                    }, "audio"
+                                                );
+                                            }}
+                                            title={isGroup ? "Gọi thoại nhóm" : "Gọi thoại"}
+                                            className="p-2 hover:bg-slate-100 rounded-full text-slate-500 hover:text-emerald-600 transition cursor-pointer"
                                         >
-                                            <Users className="w-4 h-4" />
-                                            <span>Thành viên</span>
+                                            <Phone className="w-5 h-5" />
                                         </button>
-                                    )}
+                                        <button
+                                            onClick={() => {
+                                                const cId = selectedConv._id || selectedConv.id;
+                                                const other = selectedConv.participants?.find(p => p.userId !== currentUser.id);
+                                                initiateCall(
+                                                    isGroup ? {
+                                                        id: selectedConv.groupRef?._id || cId,
+                                                        displayName: title,
+                                                        avatarUrl: avatar,
+                                                        isGroup: true,
+                                                        groupId: selectedConv.groupRef?._id || cId,
+                                                        targetUserIds: selectedConv.participants?.map(p => p.userId).filter(id => String(id) !== String(currentUser.id)) || []
+                                                    } : {
+                                                        id: other?.userId,
+                                                        displayName: other?.displayName,
+                                                        avatarUrl: other?.avatarUrl
+                                                    }, "video"
+                                                );
+                                            }}
+                                            title={isGroup ? "Gọi Video nhóm" : "Gọi Video"}
+                                            className="p-2 hover:bg-slate-100 rounded-full text-slate-500 hover:text-blue-600 transition cursor-pointer"
+                                        >
+                                            <Video className="w-5 h-5" />
+                                        </button>
+                                        {isGroup && (
+                                            <button
+                                                onClick={handleOpenMembersModal}
+                                                className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-650 hover:text-blue-600 rounded-xl text-xs font-semibold cursor-pointer transition shadow-sm"
+                                            >
+                                                <Users className="w-4 h-4" />
+                                                <span>Thành viên</span>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })()}
