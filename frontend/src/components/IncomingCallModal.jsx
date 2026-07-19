@@ -4,7 +4,7 @@ import { Phone, PhoneOff, Video } from "lucide-react";
 const IncomingCallModal = ({ incomingCall, onAccept, onReject }) => {
     if (!incomingCall) return null;
 
-    const { callerName, callerAvatar, callType } = incomingCall;
+    const { callerName, callerAvatar, callType, isGroup, groupName, groupAvatar } = incomingCall;
 
     // Ringtone simulation using web audio API synthesized beep or silent fail
     useEffect(() => {

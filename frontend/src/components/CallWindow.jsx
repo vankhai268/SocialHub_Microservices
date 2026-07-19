@@ -20,7 +20,9 @@ const ICE_SERVERS = {
 };
 
 const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
-    const { targetUser, callType, isCaller, offerSdp } = activeCall;
+    if (!activeCall) return null;
+
+    const { targetUser = {}, callType = 'video', isCaller = false, offerSdp } = activeCall;
 
     const [callStatus, setCallStatus] = useState(isCaller ? "calling" : "connecting"); // 'calling' | 'connecting' | 'connected' | 'ended'
     const [isMuted, setIsMuted] = useState(false);
@@ -37,7 +39,7 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
     const pendingOfferRef = useRef(null);
     const isMediaReadyRef = useRef(false);
 
-    const targetTargetId = targetUser.id || targetUser.userId;
+    const targetTargetId = targetUser?.id || targetUser?.userId || targetUser?.groupId || '';
 
     // Tối ưu hóa băng thông & chất lượng mic với Opus Codec (128kbps High Fidelity, Inband FEC)
     const tuneOpusAudioSDP = (sdpObj) => {
@@ -388,12 +390,12 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
                 <div className="absolute top-0 inset-x-0 p-4 z-20 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
                     <div className="flex items-center space-x-3">
                         <img
-                            src={targetUser.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
-                            alt={targetUser.displayName}
+                            src={targetUser?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                            alt={targetUser?.displayName || "Người dùng"}
                             className="w-10 h-10 rounded-full border border-slate-600 object-cover"
                         />
                         <div>
-                            <h4 className="text-white font-bold text-sm">{targetUser.displayName}</h4>
+                            <h4 className="text-white font-bold text-sm">{targetUser?.displayName || "Người dùng"}</h4>
                             <p className="text-xs text-slate-300 font-mono">
                                 {callStatus === "connected" ? formatDuration(duration) : callStatus === "calling" ? "Đang đổ chuông..." : "Đang kết nối..."}
                             </p>
@@ -427,8 +429,8 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
                     {(callStatus !== "connected" || callType === "audio") && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 space-y-4">
                             <img
-                                src={targetUser.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
-                                alt={targetUser.displayName}
+                                src={targetUser?.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                                alt={targetUser?.displayName || "Người dùng"}
                                 className="w-28 h-28 rounded-full border-4 border-slate-700 object-cover animate-pulse"
                             />
                             <p className="text-slate-300 text-sm font-medium">
