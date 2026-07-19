@@ -278,6 +278,32 @@ Khi khởi chạy WebRTC, component sẽ gọi API đến Backend để nhận c
                 peerConnectionRef.current = pc;
 ```
 
+### Bước 5.4: Cấu hình biến môi trường cho môi trường Phát triển Local (Vercel & Local Backend)
+Do Frontend hoạt động theo cơ chế tải động cấu hình từ Backend, việc quản lý các biến môi trường cho môi trường Dev local và Vercel trở nên vô cùng đơn giản:
+
+#### 1. Trên Vercel (Frontend tĩnh):
+- **KHÔNG CẦN thêm bất kỳ biến môi trường nào liên quan đến TURN** (như `VITE_TURN_URL`, `VITE_TURN_USERNAME`, v.v.) lên Vercel.
+- Chỉ giữ duy nhất cấu hình biến **`VITE_API_URL`** trỏ tới địa chỉ đường hầm Cloudflare Tunnel của backend (ví dụ: `https://api-local.yourdomain.com`).
+- *Lý do*: Trình duyệt khi chạy ứng dụng từ Vercel sẽ tự động gửi API call về Backend để lấy các thông số kết nối TURN. Việc này giúp bảo mật thông tin nhạy cảm của TURN Server và tránh lộ lọt trên client bundle.
+
+#### 2. Dưới máy Local (Chạy Backend):
+Để Backend local của bạn đọc được thông tin TURN Server và phản hồi lại cho Frontend, hãy cập nhật các tệp môi trường cục bộ:
+
+- **Trường hợp chạy bằng Docker Compose**: Thêm vào cuối file [.env](file:///.env) ở thư mục root dự án:
+  ```env
+  # --- TURN Server (WebRTC) ---
+  TURN_URL=turn:turn.socialhubzz.cloud:3478
+  TURN_USERNAME=socialhub_user
+  TURN_CREDENTIAL=socialhub_secret_pass
+  ```
+- **Trường hợp chạy Node trực tiếp (npm run dev)**: Thêm vào cuối file [services/chat-service/.env](file:///services/chat-service/.env):
+  ```env
+  # --- TURN Server (WebRTC) ---
+  TURN_URL=turn:turn.social...:3478
+  TURN_USERNAME=socialhub_...
+  TURN_CREDENTIAL=socialhub_...
+  ```
+
 ---
 
 ## 🧪 6. Kiểm tra hoạt động (Verification)
