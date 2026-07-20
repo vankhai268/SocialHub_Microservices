@@ -245,6 +245,19 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
 
                 // TRƯỜNG HỢP A: CUỘC GỌI NHÓM (Zoom / Google Meet Style)
                 if (isGroup) {
+                    // Đảm bảo tất cả các peer connection nhóm đã được gán localStream tracks
+                    Object.values(groupPeersRef.current).forEach(peerObj => {
+                        if (peerObj && peerObj.pc) {
+                            const senders = peerObj.pc.getSenders();
+                            stream.getTracks().forEach(track => {
+                                const hasTrack = senders.some(s => s.track && s.track.kind === track.kind);
+                                if (!hasTrack) {
+                                    peerObj.pc.addTrack(track, stream);
+                                }
+                            });
+                        }
+                    });
+
                     chatSocket.emit("group-call:join", { groupId });
 
                     if (isCaller && targetUser?.targetUserIds) {
@@ -327,6 +340,17 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
 
             for (const peer of existingParticipants) {
                 const pc = await createPeerConnectionForGroupMember(peer.userId, peer.displayName, peer.avatarUrl, serversConfig);
+                
+                if (localStreamRef.current) {
+                    const senders = pc.getSenders();
+                    localStreamRef.current.getTracks().forEach(track => {
+                        const hasTrack = senders.some(s => s.track && s.track.kind === track.kind);
+                        if (!hasTrack) {
+                            pc.addTrack(track, localStreamRef.current);
+                        }
+                    });
+                }
+
                 const rawOffer = await pc.createOffer();
                 const offer = tuneOpusAudioSDP(rawOffer);
                 await pc.setLocalDescription(offer);
@@ -346,22 +370,14 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
                 return [...prev, { userId, displayName, avatarUrl, stream: null }];
             });
 
-            // Tự động khởi tạo PeerConnection và gửi SDP Offer tới thành viên mới
+            // Khởi tạo sẵn PeerConnection cho thành viên mới (chờ nhận Offer từ người mới gia nhập)
             let serversConfig = ICE_SERVERS;
             try {
                 const res = await api.get("/conversations/ice-servers");
                 if (res.data?.data?.iceServers) serversConfig = { iceServers: res.data.data.iceServers };
             } catch (e) {}
 
-            const pc = await createPeerConnectionForGroupMember(userId, displayName, avatarUrl, serversConfig);
-            const rawOffer = await pc.createOffer();
-            const offer = tuneOpusAudioSDP(rawOffer);
-            await pc.setLocalDescription(offer);
-
-            chatSocket.emit("webrtc:offer", {
-                targetUserId: userId,
-                sdp: offer
-            });
+            await createPeerConnectionForGroupMember(userId, displayName, avatarUrl, serversConfig);
         };
 
         const handleGroupUserLeft = ({ userId }) => {
@@ -397,6 +413,17 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
 
             if (isGroup) {
                 const pc = await createPeerConnectionForGroupMember(senderId, "Thành viên nhóm", null, serversConfig);
+                
+                if (localStreamRef.current) {
+                    const senders = pc.getSenders();
+                    localStreamRef.current.getTracks().forEach(track => {
+                        const hasTrack = senders.some(s => s.track && s.track.kind === track.kind);
+                        if (!hasTrack) {
+                            pc.addTrack(track, localStreamRef.current);
+                        }
+                    });
+                }
+
                 await pc.setRemoteDescription(new RTCSessionDescription(sdp));
                 const rawAnswer = await pc.createAnswer();
                 const answer = tuneOpusAudioSDP(rawAnswer);
