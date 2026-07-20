@@ -7,11 +7,10 @@ const ICE_SERVERS = {
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
-        {
-            urls: import.meta.env.VITE_TURN_URL || "turn:turn.yourdomain.com:3478",
-            username: import.meta.env.VITE_TURN_USERNAME || "socialhub_user",
-            credential: import.meta.env.VITE_TURN_CREDENTIAL || "socialhub_secret_pass"
-        }
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
+        { urls: "stun:stun.services.mozilla.com" },
+        { urls: "stun:global.stun.twilio.com:3478" }
     ]
 };
 
@@ -224,10 +223,14 @@ const CallWindow = ({ activeCall, chatSocket, currentUserId, onClose }) => {
                     console.warn("⚠️ Fallback ICE Servers:", apiErr);
                 }
 
-                // 1. Xin quyền Camera / Micro
+                // 1. Xin quyền Camera / Micro (Tối ưu độ phân giải 480p cho gọi nhóm để tiết kiệm băng thông và CPU)
                 const constraints = {
                     audio: true,
-                    video: callType === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false
+                    video: callType === "video" 
+                        ? (isGroup 
+                            ? { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } }
+                            : { width: { ideal: 1280 }, height: { ideal: 720 } })
+                        : false
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
