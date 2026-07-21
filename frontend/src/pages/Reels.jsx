@@ -118,33 +118,33 @@ const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenCom
       {/* Nút bật/tắt tiếng âm thanh */}
       <button
         onClick={toggleMute}
-        className="absolute top-4 right-4 p-2.5 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white cursor-pointer z-30 transition duration-150"
+        className="absolute top-3 right-3 p-2.5 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white cursor-pointer z-30 transition duration-150 active:scale-95"
       >
         {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
       </button>
 
       {/* Phần thông tin tác giả và mô tả ở góc dưới bên trái */}
-      <div className="absolute bottom-6 left-4 right-16 text-left space-y-2 z-30 max-w-[80%] pointer-events-auto">
-        <div className="flex items-center space-x-2.5">
+      <div className="absolute bottom-8 left-3.5 right-14 text-left space-y-1.5 z-30 max-w-[78%] pointer-events-auto">
+        <div className="flex items-center space-x-2">
           <img
             src={reel.author?.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${reel.author_id}`}
-            className="w-9 h-9 rounded-full object-cover border border-white/20 shadow-md"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-white/20 shadow-md"
             alt="Author Avatar"
           />
           <div>
-            <span className="font-bold text-sm text-white drop-shadow-md">{reel.author?.displayName || "Người dùng"}</span>
+            <span className="font-bold text-xs sm:text-sm text-white drop-shadow-md">{reel.author?.displayName || "Người dùng"}</span>
             <span className="text-[10px] text-white/70 block drop-shadow-sm">{reel.view_count || 0} lượt xem</span>
           </div>
         </div>
         {reel.content && (
-          <p className="text-xs text-white/90 leading-relaxed font-medium line-clamp-3 drop-shadow-md select-text">
+          <p className="text-[11px] sm:text-xs text-white/90 leading-relaxed font-medium line-clamp-2 drop-shadow-md select-text">
             {reel.content}
           </p>
         )}
       </div>
 
       {/* Cột các nút tương tác bên phải (Like, Comment, Share) */}
-      <div className="absolute bottom-6 right-3 flex flex-col items-center space-y-5 z-30 pointer-events-auto">
+      <div className="absolute bottom-8 right-2.5 sm:right-3 flex flex-col items-center space-y-4 sm:space-y-5 z-30 pointer-events-auto">
         {/* Nút Like (Heart) */}
         <div className="flex flex-col items-center text-center space-y-1">
           <button
@@ -428,10 +428,10 @@ const Reels = () => {
   };
 
   return (
-    <div className="w-full flex items-center justify-center min-h-[calc(100vh-8.5rem)] md:min-h-[calc(100vh-6rem)] relative bg-slate-900 md:rounded-3xl overflow-hidden shadow-2xl py-0 md:py-3 border-0 md:border border-white/5 select-none">
+    <div className="w-full flex items-center justify-center h-[calc(100vh-7.5rem)] md:h-[calc(100vh-6rem)] relative bg-slate-900 md:rounded-3xl overflow-hidden shadow-2xl py-0 md:py-3 border-0 md:border border-white/5 select-none">
       
       {/* Frame bọc ngoài cố định không cuộn */}
-      <div className="w-full md:max-w-[420px] h-[calc(100vh-8.5rem)] md:h-[78vh] md:rounded-2xl border-0 md:border border-white/10 shadow-2xl relative bg-slate-950 flex flex-col overflow-hidden">
+      <div className="w-full md:max-w-[420px] h-[calc(100vh-7.5rem)] md:h-[78vh] md:rounded-2xl border-0 md:border border-white/10 shadow-2xl relative bg-slate-950 flex flex-col overflow-hidden">
         
         {/* Khung chứa các Video cuộn dọc */}
         <div 
@@ -545,13 +545,13 @@ const Reels = () => {
         )}
       </div>
 
-      {/* Nút "Tạo Reels" nổi bay bổng bên cạnh phải màn hình */}
-      <div className="absolute top-6 right-6 z-10 pointer-events-auto">
+      {/* Nút "Tạo Reels" nổi bên góc trên bên trái màn hình */}
+      <div className="absolute top-3 left-3 z-30 pointer-events-auto">
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-1.5 px-4.5 py-2.5 bg-gradient-to-r from-violet-600 to-pink-600 hover:opacity-90 active:scale-95 text-white font-bold rounded-full text-xs shadow-lg shadow-violet-500/20 cursor-pointer transition duration-150"
+          className="flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-violet-600 to-pink-600 hover:opacity-90 active:scale-95 text-white font-bold rounded-full text-[11px] sm:text-xs shadow-lg shadow-violet-500/20 cursor-pointer transition duration-150 backdrop-blur-md"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
           <span>Tạo Reels</span>
         </button>
       </div>
