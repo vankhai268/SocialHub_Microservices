@@ -32,7 +32,7 @@ const HlsVideoPlayer = ({
   const localVideoRef = useRef(null);
   const videoRef = videoRefProp || localVideoRef;
   const hlsRef = useRef(null);
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [loadingText, setLoadingText] = useState("Đang tải video...");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -46,7 +46,7 @@ const HlsVideoPlayer = ({
     if (!mediaId) return;
 
     setIsLoading(true);
-    setLoadingText("Đang tối ưu hóa video (HLS)...");
+    setLoadingText("Đang tải video ...");
 
     const baseURL = api.defaults.baseURL || "";
     const hlsMasterUrl = `${baseURL}/media/hls/${mediaId}/index.m3u8`;
@@ -191,7 +191,7 @@ const HlsVideoPlayer = ({
       videoNode.src = hlsMasterUrl;
       setIsLoading(false);
       if (autoPlay || (isReel && isActive)) {
-        videoNode.play().then(() => { setIsPlaying(true); if (onPlaySuccess) onPlaySuccess(); }).catch(() => {});
+        videoNode.play().then(() => { setIsPlaying(true); if (onPlaySuccess) onPlaySuccess(); }).catch(() => { });
       }
     } else if (Hls.isSupported()) {
       setupHlsJs();
@@ -232,6 +232,15 @@ const HlsVideoPlayer = ({
       setIsPlaying(false);
     }
   }, [isReel, isActive]);
+
+  // Đồng bộ prop muted từ parent component (ví dụ Reels toggle sound)
+  useEffect(() => {
+    const videoNode = videoRef.current;
+    if (videoNode) {
+      videoNode.muted = muted;
+      setIsMuted(muted);
+    }
+  }, [muted]);
 
   // Clean up fallback blob URL khi unmount
   useEffect(() => {
@@ -291,14 +300,14 @@ const HlsVideoPlayer = ({
     if (!targetNode) return;
 
     if (!document.fullscreenElement) {
-      targetNode.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+      targetNode.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => { });
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => { });
     }
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={`relative overflow-hidden flex items-center justify-center bg-black group select-none ${className}`}
     >
@@ -343,7 +352,7 @@ const HlsVideoPlayer = ({
 
       {/* Nút Play hiển thị chính giữa khi tạm dừng video */}
       {!isPlaying && !isLoading && (
-        <div 
+        <div
           onClick={handleTogglePlay}
           className="absolute inset-0 flex items-center justify-center z-10 cursor-pointer bg-black/10 group-hover:bg-black/20 transition"
         >
@@ -357,11 +366,11 @@ const HlsVideoPlayer = ({
       {controls && (
         <div className="absolute bottom-0 left-0 right-0 z-30 px-3 pb-2 pt-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col space-y-1.5 opacity-90 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto">
           {/* Thanh Progress Scrubber Tua Video */}
-          <div 
+          <div
             className="relative w-full h-1.5 hover:h-2.5 bg-white/20 hover:bg-white/30 rounded-full cursor-pointer transition-all duration-150 group/bar"
             onClick={handleSeek}
           >
-            <div 
+            <div
               className="h-full bg-violet-500 rounded-full relative group-hover/bar:bg-violet-400"
               style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
             >

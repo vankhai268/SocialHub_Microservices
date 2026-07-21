@@ -50,6 +50,7 @@ export const hlsService = {
             '-crf 23',
             '-pix_fmt yuv420p',
             '-c:a aac',
+            '-ac 2',
             '-ar 44100',
             '-b:a 128k',
             '-af aresample=async=1',

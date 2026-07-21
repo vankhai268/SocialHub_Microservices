@@ -426,23 +426,32 @@ const Reels = () => {
               <p className="text-xs">Đang chuẩn bị thước phim...</p>
             </div>
           ) : reels.length > 0 ? (
-            reels.map((reel, index) => (
-              <div 
-                key={reel.id} 
-                data-index={index} 
-                className="w-full h-full shrink-0 snap-start"
-              >
-                <ReelItem
-                  reel={reel}
-                  isActive={index === activeReelIndex}
-                  isMuted={isMuted}
-                  toggleMute={() => setIsMuted(prev => !prev)}
-                  onLikeToggle={handleLikeToggle}
-                  onOpenComments={handleOpenComments}
-                  onShare={handleShareClick}
-                />
-              </div>
-            ))
+            reels.map((reel, index) => {
+              const isAdjacent = Math.abs(index - activeReelIndex) <= 1;
+              return (
+                <div 
+                  key={reel.id} 
+                  data-index={index} 
+                  className="w-full h-full shrink-0 snap-start"
+                >
+                  {isAdjacent ? (
+                    <ReelItem
+                      reel={reel}
+                      isActive={index === activeReelIndex}
+                      isMuted={isMuted}
+                      toggleMute={() => setIsMuted(prev => !prev)}
+                      onLikeToggle={handleLikeToggle}
+                      onOpenComments={handleOpenComments}
+                      onShare={handleShareClick}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-600 space-y-2">
+                      <Loader className="w-6 h-6 animate-spin text-slate-700" />
+                    </div>
+                  )}
+                </div>
+              );
+            })
           ) : (
             <div className="flex-1 flex flex-col justify-center items-center text-slate-500 text-xs italic space-y-4 p-8 text-center">
               <p>Chưa có Reels nào được đăng tải.</p>
