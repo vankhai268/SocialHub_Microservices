@@ -9,10 +9,14 @@ const ChatMedia = ({ mediaId, onLoad, onOpenLightbox, isThumbnailOnly = false })
 
     useEffect(() => {
         let isMounted = true;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         const fetchMedia = async () => {
             try {
                 const response = await api.get(`/media/file/${mediaId}`, {
-                    responseType: "blob"
+                    responseType: "blob",
+                    signal: controller.signal
                 });
                 if (isMounted) {
                     const objectUrl = URL.createObjectURL(response.data);
@@ -23,8 +27,10 @@ const ChatMedia = ({ mediaId, onLoad, onOpenLightbox, isThumbnailOnly = false })
                     });
                 }
             } catch (err) {
-                console.error("❌ Lỗi tải media đính kèm chat:", err);
+                console.error("❌ Lỗi tải media đính kèm chat:", err.message);
+                if (isMounted) setMediaData(null);
             } finally {
+                clearTimeout(timeoutId);
                 if (isMounted) setIsLoading(false);
             }
         };
@@ -33,6 +39,8 @@ const ChatMedia = ({ mediaId, onLoad, onOpenLightbox, isThumbnailOnly = false })
 
         return () => {
             isMounted = false;
+            controller.abort();
+            clearTimeout(timeoutId);
             if (mediaData?.url) URL.revokeObjectURL(mediaData.url);
         };
     }, [mediaId]);

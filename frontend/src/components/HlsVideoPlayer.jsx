@@ -26,6 +26,7 @@ const HlsVideoPlayer = ({
   onLoadedMetadata: parentOnLoadedMetadata,
   onEnded: parentOnEnded,
   onClick: parentOnClick,
+  objectFit = "object-cover",
   videoRefProp
 }) => {
   const containerRef = useRef(null);
@@ -41,6 +42,10 @@ const HlsVideoPlayer = ({
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fallbackBlobUrl, setFallbackBlobUrl] = useState(null);
+
+  const [isLandscape, setIsLandscape] = useState(false);
+
+  const effectivePoster = poster || (mediaId ? `${api.defaults.baseURL || ""}/media/file/${mediaId}?variant=medium` : undefined);
 
   useEffect(() => {
     if (!mediaId) return;
@@ -92,6 +97,12 @@ const HlsVideoPlayer = ({
         manifestLoaded = true;
         if (isSubscribed) {
           setIsLoading(false);
+          if (videoNode.duration && !isNaN(videoNode.duration)) {
+            setDuration(videoNode.duration);
+          }
+          if (videoNode.videoWidth && videoNode.videoHeight) {
+            setIsLandscape(videoNode.videoWidth > videoNode.videoHeight);
+          }
           if (autoPlay || (isReel && isActive)) {
             videoNode.play()
               .then(() => {
@@ -163,7 +174,12 @@ const HlsVideoPlayer = ({
             videoNode.onloadedmetadata = (e) => {
               if (isSubscribed) {
                 setIsLoading(false);
-                setDuration(videoNode.duration);
+                if (videoNode.duration && !isNaN(videoNode.duration)) {
+                  setDuration(videoNode.duration);
+                }
+                if (videoNode.videoWidth && videoNode.videoHeight) {
+                  setIsLandscape(videoNode.videoWidth > videoNode.videoHeight);
+                }
                 if (parentOnLoadedMetadata) parentOnLoadedMetadata(e);
                 if (autoPlay || (isReel && isActive)) {
                   videoNode.play()
@@ -311,24 +327,69 @@ const HlsVideoPlayer = ({
       ref={containerRef}
       className={`relative overflow-hidden flex items-center justify-center bg-black group select-none ${className}`}
     >
+      {/* Dynamic Ambient Blur Backdrop cho các video tỷ lệ ngang 16:9 khi xem Reels */}
+      {isLandscape && effectivePoster && (
+        <img
+          src={effectivePoster}
+          alt="Video Backdrop"
+          className="absolute inset-0 w-full h-full object-cover blur-2xl scale-125 opacity-40 pointer-events-none"
+        />
+      )}
+
       {/* HTML5 Video Element */}
       <video
         ref={videoRef}
-        poster={poster}
-        className="w-full h-full object-cover"
+        poster={effectivePoster}
+        className={`w-full h-full relative z-10 ${
+          isLandscape ? "object-contain" : (objectFit || "object-cover")
+        }`}
         controls={false} // Tắt controls mặc định của trình duyệt để dùng custom UI đẹp mắt 100%
         loop={loop}
         muted={isMuted}
         playsInline
         preload="metadata"
+        crossOrigin="anonymous"
         onClick={handleTogglePlay}
         onTimeUpdate={(e) => {
-          if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
+          if (videoRef.current) {
+            setCurrentTime(videoRef.current.currentTime);
+            if ((!duration || isNaN(duration)) && videoRef.current.duration && !isNaN(videoRef.current.duration)) {
+              setDuration(videoRef.current.duration);
+            }
+            if (videoRef.current.videoWidth && videoRef.current.videoHeight) {
+              const isWide = videoRef.current.videoWidth > videoRef.current.videoHeight;
+              if (isWide !== isLandscape) setIsLandscape(isWide);
+            }
+          }
           if (parentOnTimeUpdate) parentOnTimeUpdate(e);
         }}
         onLoadedMetadata={(e) => {
-          if (videoRef.current) setDuration(videoRef.current.duration);
+          if (videoRef.current) {
+            if (videoRef.current.duration && !isNaN(videoRef.current.duration)) {
+              setDuration(videoRef.current.duration);
+            }
+            if (videoRef.current.videoWidth && videoRef.current.videoHeight) {
+              setIsLandscape(videoRef.current.videoWidth > videoRef.current.videoHeight);
+            }
+            setIsLoading(false);
+          }
           if (parentOnLoadedMetadata) parentOnLoadedMetadata(e);
+        }}
+        onCanPlay={(e) => {
+          if (videoRef.current) {
+            if (videoRef.current.duration && !isNaN(videoRef.current.duration)) {
+              setDuration(videoRef.current.duration);
+            }
+            if (videoRef.current.videoWidth && videoRef.current.videoHeight) {
+              setIsLandscape(videoRef.current.videoWidth > videoRef.current.videoHeight);
+            }
+          }
+          setIsLoading(false);
+        }}
+        onDurationChange={() => {
+          if (videoRef.current && videoRef.current.duration && !isNaN(videoRef.current.duration)) {
+            setDuration(videoRef.current.duration);
+          }
         }}
         onEnded={(e) => {
           setIsPlaying(false);

@@ -14,6 +14,8 @@ import {
   X,
   Play,
   Pause,
+  ChevronDown,
+  Film,
   MessageSquareCode
 } from "lucide-react";
 import CreateReelModal from "../components/CreateReelModal";
@@ -70,6 +72,11 @@ const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenCom
     }
   };
 
+  const likeCount = reel.like_count ?? reel.likeCount ?? 0;
+  const commentCount = reel.comment_count ?? reel.commentCount ?? 0;
+  const shareCount = reel.share_count ?? reel.shareCount ?? 0;
+  const viewCount = reel.view_count ?? reel.viewCount ?? 0;
+
   return (
     <div className="w-full h-full snap-start flex justify-center items-center bg-slate-950 relative border-b border-white/5 overflow-hidden">
       {/* Video Phát chính bằng HLS Streaming */}
@@ -81,7 +88,7 @@ const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenCom
           muted={isMuted}
           controls={false}
           videoRefProp={videoRef}
-          className="w-full h-full object-cover max-w-[450px] cursor-pointer"
+          className="w-full h-full max-w-[450px] cursor-pointer"
           onClick={handleVideoClick}
           onTimeUpdate={() => {
             if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
@@ -115,6 +122,12 @@ const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenCom
         </div>
       )}
 
+      {/* Chỉ báo cuộn lên/xuống (Scroll Indicator) */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white/90 text-[10px] z-30 pointer-events-none animate-bounce shadow-md">
+        <ChevronDown className="w-3.5 h-3.5 text-violet-400 animate-pulse" />
+        <span>Vuốt để xem Reels tiếp</span>
+      </div>
+
       {/* Nút bật/tắt tiếng âm thanh */}
       <button
         onClick={toggleMute}
@@ -124,20 +137,20 @@ const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenCom
       </button>
 
       {/* Phần thông tin tác giả và mô tả ở góc dưới bên trái */}
-      <div className="absolute bottom-8 left-3.5 right-14 text-left space-y-1.5 z-30 max-w-[78%] pointer-events-auto">
+      <div className="absolute bottom-8 left-3 sm:left-4 right-14 text-left space-y-1.5 z-30 max-w-[78%] sm:max-w-[80%] pointer-events-auto break-words">
         <div className="flex items-center space-x-2">
           <img
             src={reel.author?.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${reel.author_id}`}
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-white/20 shadow-md"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-white/20 shadow-md shrink-0"
             alt="Author Avatar"
           />
-          <div>
-            <span className="font-bold text-xs sm:text-sm text-white drop-shadow-md">{reel.author?.displayName || "Người dùng"}</span>
-            <span className="text-[10px] text-white/70 block drop-shadow-sm">{reel.view_count || 0} lượt xem</span>
+          <div className="min-w-0 flex-1">
+            <span className="font-bold text-xs sm:text-sm text-white drop-shadow-md block truncate">{reel.author?.displayName || "Người dùng"}</span>
+            <span className="text-[10px] text-white/70 block drop-shadow-sm">{viewCount} lượt xem</span>
           </div>
         </div>
         {reel.content && (
-          <p className="text-[11px] sm:text-xs text-white/90 leading-relaxed font-medium line-clamp-2 drop-shadow-md select-text">
+          <p className="text-[11px] sm:text-xs text-white/90 leading-relaxed font-medium line-clamp-3 drop-shadow-md select-text break-words">
             {reel.content}
           </p>
         )}
@@ -157,7 +170,7 @@ const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenCom
           >
             <Heart className={`w-5 h-5 ${reel.isLikedByMe ? "fill-white" : ""}`} />
           </button>
-          <span className="text-[10px] font-bold text-white drop-shadow-md">{reel.like_count || 0}</span>
+          <span className="text-[10px] font-bold text-white drop-shadow-md">{likeCount}</span>
         </div>
 
         {/* Nút bình luận */}
@@ -168,7 +181,7 @@ const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenCom
           >
             <MessageCircle className="w-5 h-5" />
           </button>
-          <span className="text-[10px] font-bold text-white drop-shadow-md">{reel.comment_count || 0}</span>
+          <span className="text-[10px] font-bold text-white drop-shadow-md">{commentCount}</span>
         </div>
 
         {/* Nút chia sẻ */}
@@ -179,7 +192,7 @@ const ReelItem = ({ reel, isActive, isMuted, toggleMute, onLikeToggle, onOpenCom
           >
             <Share2 className="w-5 h-5" />
           </button>
-          <span className="text-[10px] font-bold text-white drop-shadow-md">{reel.share_count || 0}</span>
+          <span className="text-[10px] font-bold text-white drop-shadow-md">{shareCount}</span>
         </div>
       </div>
 
@@ -428,10 +441,25 @@ const Reels = () => {
   };
 
   return (
-    <div className="w-full h-full flex items-center justify-center relative bg-slate-900 md:rounded-3xl overflow-hidden shadow-2xl py-0 md:py-3 border-0 md:border border-white/5 select-none">
+    <div className="w-full h-full flex flex-col items-center justify-center relative select-none py-2 md:py-0">
       
+      {/* Header bar trên Reels Player */}
+      <div className="w-full max-w-[420px] flex justify-between items-center mb-2.5 px-2 sm:px-0">
+        <h2 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight flex items-center space-x-2">
+          <Film className="w-5 h-5 text-violet-600" />
+          <span>Reels</span>
+        </h2>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center space-x-1.5 px-3.5 py-2 bg-gradient-to-r from-violet-600 to-pink-600 hover:opacity-90 active:scale-95 text-white font-bold rounded-xl text-xs shadow-md shadow-violet-500/20 cursor-pointer transition duration-150"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Tạo Reels</span>
+        </button>
+      </div>
+
       {/* Frame bọc ngoài cố định không cuộn */}
-      <div className="w-full h-full md:max-w-[420px] md:h-[78vh] md:rounded-2xl border-0 md:border border-white/10 shadow-2xl relative bg-slate-950 flex flex-col overflow-hidden">
+      <div className="w-full h-[calc(100vh-11rem)] md:max-w-[420px] md:h-[78vh] md:rounded-2xl border-0 md:border border-slate-800 shadow-2xl relative bg-slate-950 flex flex-col overflow-hidden">
         
         {/* Khung chứa các Video cuộn dọc */}
         <div 
@@ -543,17 +571,6 @@ const Reels = () => {
             </form>
           </div>
         )}
-      </div>
-
-      {/* Nút "Tạo Reels" nổi bên góc trên bên trái màn hình */}
-      <div className="absolute top-3 left-3 z-30 pointer-events-auto">
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-violet-600 to-pink-600 hover:opacity-90 active:scale-95 text-white font-bold rounded-full text-[11px] sm:text-xs shadow-lg shadow-violet-500/20 cursor-pointer transition duration-150 backdrop-blur-md"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Tạo Reels</span>
-        </button>
       </div>
 
       {/* Modals hỗ trợ đăng Reels và Chia sẻ */}

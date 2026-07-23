@@ -98,6 +98,14 @@ export const login = async (req, res) => {
         const accessToken = generateAccessToken(dbUser.id);
         const refreshToken = generateRefreshToken(dbUser.id);
 
+        // Cập nhật last_login và updated_at trong DB
+        const nowLogin = new Date();
+        await pool.query(
+            "UPDATE users SET last_login = $1, updated_at = $1 WHERE id = $2",
+            [nowLogin, dbUser.id]
+        );
+        await redis.del(`user:${dbUser.id}`).catch(() => {});
+
         // Lưu Refresh Token mới vào PostgreSQL
         const expiry = getRefreshTokenExpiry(7);
         await pool.query(
@@ -110,7 +118,9 @@ export const login = async (req, res) => {
             email: dbUser.email,
             displayName: dbUser.display_name,
             bio: dbUser.bio,
-            avatarUrl: dbUser.avatar_url
+            avatarUrl: dbUser.avatar_url,
+            coverUrl: dbUser.cover_url,
+            lastLogin: nowLogin
         }
 
         return res.status(200).json({

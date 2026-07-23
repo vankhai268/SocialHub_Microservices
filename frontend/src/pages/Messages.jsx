@@ -26,16 +26,20 @@ import {
 
 const formatLastMessagePreview = (lastMsg) => {
     if (!lastMsg) return "Chưa có tin nhắn...";
-    if (lastMsg.type === "image") return "Đã gửi tệp media";
+    if (lastMsg.type === "image") return "[Đã gửi 1 hình ảnh 📷]";
+    if (lastMsg.type === "video") return "[Đã gửi 1 video 🎥]";
     const content = lastMsg.content || "";
     if (content.trim().startsWith("{") && content.includes('"postId"')) {
         try {
             const parsed = JSON.parse(content);
-            if (parsed.isReel) return "Đã chia sẻ một thước phim 🎬";
+            if (parsed.isReel) return "[Đã chia sẻ 1 thước phim 🎬]";
         } catch (e) {}
-        return "Đã chia sẻ một bài viết";
+        return "[Đã chia sẻ 1 bài viết]";
     }
-    if (lastMsg.type === "share") return "Đã chia sẻ một bài viết";
+    if (lastMsg.type === "share") return "[Đã chia sẻ 1 bài viết]";
+    if (lastMsg.mediaId || (lastMsg.media_ids && lastMsg.media_ids.length > 0)) {
+        return "[Đã gửi tệp phương tiện 📁]";
+    }
     return content;
 };
 
@@ -508,9 +512,9 @@ const Messages = () => {
                                             className="w-10 h-10 rounded-full border border-slate-200 object-cover"
                                             alt="Avatar"
                                         />
-                                        {isOnline && (
-                                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white animate-pulse" />
-                                        )}
+                                        <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                                            isOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                                        }`} />
                                     </div>
 
                                     <div className="flex-1 min-w-0">
@@ -571,12 +575,20 @@ const Messages = () => {
                                         />
                                         <div className="min-w-0">
                                             <h3 className="text-sm font-bold text-slate-800 truncate">{title}</h3>
-                                            <p className="text-xs text-slate-500 mt-0.5">
-                                                {isGroup
-                                                    ? `${selectedConv.participants?.length || 0} thành viên`
-                                                    : isOnline
-                                                        ? "Đang hoạt động"
-                                                        : "Ngoại tuyến"}
+                                            <p className="text-xs mt-0.5 flex items-center">
+                                                {isGroup ? (
+                                                    <span className="text-slate-500">{selectedConv.participants?.length || 0} thành viên</span>
+                                                ) : isOnline ? (
+                                                    <span className="flex items-center text-emerald-600 font-medium">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block mr-1.5 shrink-0" />
+                                                        Đang hoạt động
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center text-slate-500">
+                                                        <span className="w-2 h-2 rounded-full bg-slate-400 inline-block mr-1.5 shrink-0" />
+                                                        Ngoại tuyến
+                                                    </span>
+                                                )}
                                             </p>
                                         </div>
                                     </div>

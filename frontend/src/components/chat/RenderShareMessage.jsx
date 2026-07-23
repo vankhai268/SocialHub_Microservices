@@ -6,7 +6,11 @@ const RenderShareMessage = ({ msgContent, isMe, onNavigate }) => {
     try {
         data = JSON.parse(msgContent);
     } catch (e) {
-        return <div className="text-xs italic text-slate-400">Tin nhắn chia sẻ (Không tải được nội dung)</div>;
+        return <div className="text-xs italic text-slate-400 bg-slate-100 p-3 rounded-xl border border-slate-200">Không tải được nội dung bài viết</div>;
+    }
+
+    if (!data || (!data.postId && !data.id)) {
+        return <div className="text-xs italic text-slate-400 bg-slate-100 p-3 rounded-xl border border-slate-200">Không tải được nội dung bài viết</div>;
     }
 
     return (

@@ -14,6 +14,15 @@ export const SocketProvider = ({ children }) => {
     const [onlineUsers, setOnlineUsers] = useState({}); // Lưu danh sách user đang online: { userId: true }
     const [incomingCall, setIncomingCall] = useState(null); // { callerId, callerName, callerAvatar, callType }
     const [activeCall, setActiveCall] = useState(null); // { targetUser, callType, isCaller, offerSdp }
+    const [activeApiBase, setActiveApiBase] = useState(api.defaults.baseURL);
+
+    useEffect(() => {
+        const handleSwitch = () => {
+            setActiveApiBase(api.defaults.baseURL);
+        };
+        window.addEventListener("server-switched", handleSwitch);
+        return () => window.removeEventListener("server-switched", handleSwitch);
+    }, []);
 
     // 1. Tải số lượng tin chưa đọc ban đầu bằng REST API
     const fetchUnreadCount = async () => {
@@ -48,7 +57,7 @@ export const SocketProvider = ({ children }) => {
         fetchUnreadCount();
 
         // Xác định socketBaseURL động dựa trên api.defaults.baseURL (bỏ đuôi /api nếu có)
-        const apiBase = api.defaults.baseURL || "http://localhost:8080/api";
+        const apiBase = activeApiBase || "http://localhost:8080/api";
         const socketBaseURL = apiBase.endsWith("/api") ? apiBase.slice(0, -4) : apiBase;
 
         // 2. Khởi tạo Notification Socket (qua đường dẫn /notification/socket.io/)
@@ -83,7 +92,7 @@ export const SocketProvider = ({ children }) => {
         });
 
         notifSock.on("notification:count", (data) => {
-            setUnreadCount(data.unreadCount);
+            setUnreadCount(data.unreadCount || 0);
         });
 
         notifSock.on("notification:new", (notification) => {

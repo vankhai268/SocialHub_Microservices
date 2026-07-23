@@ -3,8 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import PostCard from "../components/PostCard";
 import { useAuth } from "../context/AuthContext";
-import { Loader, Calendar, Mail, FileText, UserPlus, UserCheck, UserMinus, MessageSquare, Edit3, Camera, Save, X, Film } from "lucide-react";
+import { Loader, Calendar, Mail, FileText, UserPlus, UserCheck, UserMinus, MessageSquare, Edit3, Camera, Save, X, Film, Clock } from "lucide-react";
 import imageCompression from "browser-image-compression";
+import { formatRelativeTime } from "../utils/dateUtils";
 
 // Modal chỉnh sửa profile
 const EditProfileModal = ({ profileUser, onClose, onProfileUpdated }) => {
@@ -263,6 +264,44 @@ const Profile = () => {
     const [showEditModal, setShowEditModal] = useState(false);
 
     const isOwnProfile = loggedInUser?.id === id;
+    const coverInputRef = useRef(null);
+    const [isUploadingCover, setIsUploadingCover] = useState(false);
+
+    const handleCoverChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setIsUploadingCover(true);
+        try {
+            let fileToUpload = file;
+            if (file.type && file.type.startsWith("image/") && file.type !== "image/gif") {
+                try {
+                    fileToUpload = await imageCompression(file, {
+                        maxSizeMB: 1,
+                        maxWidthOrHeight: 1920,
+                        useWebWorker: true,
+                    });
+                } catch (err) {
+                    console.warn("[COMPRESS] Cover fallback:", err.message);
+                }
+            }
+            const formData = new FormData();
+            formData.append("file", fileToUpload);
+            const uploadRes = await api.post("/media/upload", formData);
+            if (uploadRes.data && uploadRes.data.id) {
+                const newCoverUrl = `${api.defaults.baseURL}/media/file/${uploadRes.data.id}?variant=original`;
+                setProfileUser(prev => ({ ...prev, coverUrl: newCoverUrl }));
+                if (loggedInUser?.id === profileUser.id && setUser) {
+                    setUser({ ...loggedInUser, coverUrl: newCoverUrl });
+                }
+                await api.put(`/users/${profileUser.id}`, { coverUrl: newCoverUrl }).catch(() => {});
+            }
+        } catch (err) {
+            console.error("❌ Lỗi tải lên ảnh bìa:", err);
+            alert("Không thể tải lên ảnh bìa. Vui lòng thử lại!");
+        } finally {
+            setIsUploadingCover(false);
+        }
+    };
 
     // A. Hàm gửi yêu cầu kết bạn
     const handleSendRequest = async () => {
@@ -385,110 +424,150 @@ const Profile = () => {
 
     return (
         <div className="space-y-8">
-            {/* Thẻ thông tin tài khoản Glassmorphism */}
-            <div className="relative bg-white border border-slate-200 rounded-2xl md:rounded-3xl p-4 md:p-8 overflow-hidden shadow-sm">
-                {/* Background phát quang trang cá nhân */}
-                <div className="absolute -top-12 -right-12 w-64 h-64 bg-blue-500/5 rounded-full blur-[96px] pointer-events-none"></div>
+            {/* Thẻ thông tin tài khoản với Cover Photo */}
+            <div className="relative bg-white border border-slate-200 rounded-2xl md:rounded-3xl overflow-hidden shadow-sm">
+                {/* Banner Ảnh Bìa (Cover Photo) */}
+                <div className="relative h-44 md:h-56 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 overflow-hidden">
+                    {profileUser.coverUrl ? (
+                        <img
+                            src={profileUser.coverUrl}
+                            alt="Cover Banner"
+                            className="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 flex items-center justify-center">
+                            <div className="absolute inset-0 bg-black/10 backdrop-blur-[2px]" />
+                        </div>
+                    )}
 
-                <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8">
-                    {/* Avatar */}
-                    <img
-                        src={profileUser.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
-                        alt="Profile Avatar"
-                        className="w-28 h-28 rounded-full border-4 border-slate-100 shadow-md object-cover"
-                    />
+                    {/* Nút Upload Ảnh Bìa (dành cho chủ sở hữu) */}
+                    {isOwnProfile && (
+                        <div className="absolute top-4 right-4 z-10">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                ref={coverInputRef}
+                                onChange={handleCoverChange}
+                                className="hidden"
+                            />
+                            <button
+                                onClick={() => coverInputRef.current?.click()}
+                                disabled={isUploadingCover}
+                                className="flex items-center space-x-1.5 px-3 py-1.5 bg-black/50 hover:bg-black/70 backdrop-blur-md text-white rounded-xl text-xs font-medium cursor-pointer transition border border-white/20 shadow-lg disabled:opacity-50"
+                            >
+                                {isUploadingCover ? (
+                                    <Loader className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                    <Camera className="w-3.5 h-3.5" />
+                                )}
+                                <span>{isUploadingCover ? "Đang tải..." : "Thêm ảnh bìa"}</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
 
-                    {/* Meta Info */}
-                    <div className="flex-1 text-center md:text-left space-y-4">
-                        <div>
-                            <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight">{profileUser.displayName}</h2>
+                {/* Phần nội dung Profile (Avatar + Thông tin) */}
+                <div className="px-4 md:px-8 pb-6 md:pb-8 pt-0">
+                    <div className="flex flex-col md:flex-row items-center md:items-end space-y-4 md:space-y-0 md:space-x-6 -mt-16 md:-mt-20 mb-4">
+                        {/* Avatar */}
+                        <div className="relative z-10">
+                            <img
+                                src={profileUser.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                                alt="Profile Avatar"
+                                className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white shadow-xl object-cover bg-white"
+                            />
+                        </div>
+
+                        {/* Meta Info */}
+                        <div className="flex-1 text-center md:text-left space-y-1">
+                            <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight">{profileUser.displayName}</h2>
                             {profileUser.bio ? (
-                                <p className="text-slate-655 text-sm mt-2 italic whitespace-pre-line max-w-md">{profileUser.bio}</p>
+                                <p className="text-slate-600 text-xs md:text-sm italic whitespace-pre-line max-w-md">{profileUser.bio}</p>
                             ) : (
-                                <p className="text-slate-400 text-sm mt-2 italic">Chưa có tiểu sử.</p>
+                                <p className="text-slate-400 text-xs italic">Chưa có tiểu sử.</p>
                             )}
                         </div>
+                    </div>
 
-                        <div className="flex flex-wrap justify-center md:justify-start gap-y-2 gap-x-6 text-sm text-slate-650">
-                            <span className="flex items-center space-x-2">
-                                <Mail className="w-4 h-4 text-blue-600" />
-                                <span>{profileUser.email}</span>
-                            </span>
-                            <span className="flex items-center space-x-2">
-                                <Calendar className="w-4 h-4 text-cyan-600" />
-                                <span>Đã tham gia: {new Date(profileUser.createdAt || Date.now()).toLocaleDateString()}</span>
-                            </span>
-                        </div>
+                    <div className="flex flex-wrap justify-center md:justify-start gap-y-2 gap-x-6 text-xs md:text-sm text-slate-650 pt-3 border-t border-slate-100">
+                        <span className="flex items-center space-x-2">
+                            <Mail className="w-4 h-4 text-blue-600" />
+                            <span>{profileUser.email}</span>
+                        </span>
+                        <span className="flex items-center space-x-2">
+                            <Clock className="w-4 h-4 text-emerald-600" />
+                            <span>Đăng nhập gần nhất: {formatRelativeTime(profileUser.updatedAt || profileUser.lastLogin || profileUser.createdAt)}</span>
+                        </span>
+                    </div>
 
-                        {/* HÀNH ĐỘNG KẾT BẠN / CHAT VỚI NGƯỜI DÙNG KHÁC */}
-                        {!isOwnProfile && (
-                            <div className="flex flex-wrap gap-3 justify-center md:justify-start pt-2">
-                                {/* Khung kết bạn */}
-                                {relation.status === "none" && (
-                                    <button
-                                        onClick={handleSendRequest}
-                                        className="flex items-center space-x-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold cursor-pointer transition shadow-md shadow-blue-600/10"
-                                    >
-                                        <UserPlus className="w-4 h-4" />
-                                        <span>Thêm bạn bè</span>
-                                    </button>
-                                )}
-                                {relation.status === "pending_sent" && (
-                                    <span className="flex items-center space-x-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-500 rounded-xl text-xs italic">
-                                        Đã gửi yêu cầu kết bạn
-                                    </span>
-                                )}
-                                {relation.status === "pending_received" && (
-                                    <div className="flex items-center space-x-2">
-                                        <button
-                                            onClick={handleAccept}
-                                            className="flex items-center space-x-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer transition"
-                                        >
-                                            <UserCheck className="w-4 h-4" />
-                                            <span>Đồng ý kết bạn</span>
-                                        </button>
-                                        <button
-                                            onClick={handleReject}
-                                            className="flex items-center space-x-1.5 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold cursor-pointer transition"
-                                        >
-                                            Từ chối
-                                        </button>
-                                    </div>
-                                )}
-                                {relation.status === "friends" && (
-                                    <button
-                                        onClick={handleUnfriend}
-                                        className="flex items-center space-x-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/50 rounded-xl text-xs font-semibold cursor-pointer transition"
-                                    >
-                                        <UserMinus className="w-4 h-4" />
-                                        <span>Hủy kết bạn</span>
-                                    </button>
-                                )}
-
-                                {/* Nút nhắn tin */}
+                    {/* HÀNH ĐỘNG KẾT BẠN / CHAT VỚI NGƯỜI DÙNG KHÁC */}
+                    {!isOwnProfile && (
+                        <div className="flex flex-wrap gap-3 justify-center md:justify-start pt-4">
+                            {/* Khung kết bạn */}
+                            {relation.status === "none" && (
                                 <button
-                                    onClick={handleStartChat}
-                                    className="flex items-center space-x-1.5 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition"
-                                >
-                                    <MessageSquare className="w-4 h-4 text-blue-600" />
-                                    <span>Nhắn tin</span>
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Nút chỉnh sửa trang cá nhân cho chính mình */}
-                        {isOwnProfile && (
-                            <div className="flex flex-wrap gap-3 justify-center md:justify-start pt-2">
-                                <button
-                                    onClick={() => setShowEditModal(true)}
+                                    onClick={handleSendRequest}
                                     className="flex items-center space-x-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold cursor-pointer transition shadow-md shadow-blue-600/10"
                                 >
-                                    <Edit3 className="w-4 h-4" />
-                                    <span>Chỉnh sửa trang cá nhân</span>
+                                    <UserPlus className="w-4 h-4" />
+                                    <span>Thêm bạn bè</span>
                                 </button>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                            {relation.status === "pending_sent" && (
+                                <span className="flex items-center space-x-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-500 rounded-xl text-xs italic">
+                                    Đã gửi yêu cầu kết bạn
+                                </span>
+                            )}
+                            {relation.status === "pending_received" && (
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={handleAccept}
+                                        className="flex items-center space-x-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer transition"
+                                    >
+                                        <UserCheck className="w-4 h-4" />
+                                        <span>Đồng ý kết bạn</span>
+                                    </button>
+                                    <button
+                                        onClick={handleReject}
+                                        className="flex items-center space-x-1.5 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold cursor-pointer transition"
+                                    >
+                                        Từ chối
+                                    </button>
+                                </div>
+                            )}
+                            {relation.status === "friends" && (
+                                <button
+                                    onClick={handleUnfriend}
+                                    className="flex items-center space-x-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/50 rounded-xl text-xs font-semibold cursor-pointer transition"
+                                >
+                                    <UserMinus className="w-4 h-4" />
+                                    <span>Hủy kết bạn</span>
+                                </button>
+                            )}
+
+                            {/* Nút nhắn tin */}
+                            <button
+                                onClick={handleStartChat}
+                                className="flex items-center space-x-1.5 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition"
+                            >
+                                <MessageSquare className="w-4 h-4 text-blue-600" />
+                                <span>Nhắn tin</span>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Nút chỉnh sửa trang cá nhân cho chính mình */}
+                    {isOwnProfile && (
+                        <div className="flex flex-wrap gap-3 justify-center md:justify-start pt-4">
+                            <button
+                                onClick={() => setShowEditModal(true)}
+                                className="flex items-center space-x-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold cursor-pointer transition shadow-md shadow-blue-600/10"
+                            >
+                                <Edit3 className="w-4 h-4" />
+                                <span>Chỉnh sửa trang cá nhân</span>
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

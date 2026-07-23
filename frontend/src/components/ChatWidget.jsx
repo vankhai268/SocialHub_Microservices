@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import ChatBox from "./ChatBox";
 import IncomingCallModal from "./IncomingCallModal";
 import CallWindow from "./CallWindow";
-import { Users, Loader, MessageSquarePlus, X } from "lucide-react";
+import { Users, Loader, MessageSquarePlus, X, UserPlus, Sparkles } from "lucide-react";
 
 const ChatWidget = () => {
     const { user: currentUser } = useAuth();
@@ -174,6 +174,8 @@ const ChatWidget = () => {
 
     if (!currentUser) return null;
 
+    const onlineCount = friends.filter(f => onlineUsers[f.id] === true).length;
+
     return (
         <>
             {/* Sidebar cố định bên phải (Right Sidebar) hiển thị danh sách bạn bè */}
@@ -196,47 +198,86 @@ const ChatWidget = () => {
                     <div className="flex justify-center py-8">
                         <Loader className="w-5 h-5 text-blue-600 animate-spin" />
                     </div>
-                ) : friends.length > 0 ? (
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                        {friends.map(friend => {
-                            // Xem trạng thái trực tuyến của bạn bè qua onlineUsers trong SocketContext
-                            const isOnline = onlineUsers[friend.id] === true;
-
-                            return (
-                                <div
-                                    key={friend.id}
-                                    className="flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-100 transition group"
-                                >
-                                    {/* Nhấp ảnh đại diện -> Đi tới trang cá nhân */}
-                                    <Link
-                                        to={`/profile/${friend.id}`}
-                                        className="relative cursor-pointer hover:opacity-85 transition block"
-                                    >
-                                        <img
-                                            src={friend.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
-                                            className="w-9 h-9 rounded-full object-cover border border-slate-200"
-                                            alt="Avatar"
-                                        />
-                                        {/* Chấm tròn báo trạng thái online/offline */}
-                                        <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${isOnline ? "bg-emerald-500" : "bg-slate-400"
-                                            }`} />
-                                    </Link>
-
-                                    {/* Nhấp tên -> Bật ô chat thoại */}
-                                    <div
-                                        onClick={() => handleOpenChat(friend)}
-                                        className="truncate flex-1 cursor-pointer"
-                                    >
-                                        <p className="text-xs font-semibold text-slate-700 group-hover:text-slate-950 truncate transition">
-                                            {friend.displayName}
-                                        </p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
                 ) : (
-                    <p className="text-center text-slate-400 text-xs py-8">Chưa có bạn bè để nhắn tin.</p>
+                    <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                        {friends.length > 0 ? (
+                            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                                {friends.map(friend => {
+                                    // Xem trạng thái trực tuyến của bạn bè qua onlineUsers trong SocketContext
+                                    const isOnline = onlineUsers[friend.id] === true;
+
+                                    return (
+                                        <div
+                                            key={friend.id}
+                                            className="flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-100 transition group"
+                                        >
+                                            {/* Nhấp ảnh đại diện -> Đi tới trang cá nhân */}
+                                            <Link
+                                                to={`/profile/${friend.id}`}
+                                                className="relative cursor-pointer hover:opacity-85 transition block shrink-0"
+                                            >
+                                                <img
+                                                    src={friend.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix"}
+                                                    className="w-9 h-9 rounded-full object-cover border border-slate-200"
+                                                    alt="Avatar"
+                                                />
+                                                {/* Chấm tròn báo trạng thái online/offline */}
+                                                <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                                                    isOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                                                }`} />
+                                            </Link>
+
+                                            {/* Nhấp tên -> Bật ô chat thoại */}
+                                            <div
+                                                onClick={() => handleOpenChat(friend)}
+                                                className="truncate flex-1 cursor-pointer"
+                                            >
+                                                <p className="text-xs font-semibold text-slate-700 group-hover:text-slate-950 truncate transition">
+                                                    {friend.displayName}
+                                                </p>
+                                                <p className="text-[10px] text-slate-400">
+                                                    {isOnline ? "Đang hoạt động" : "Ngoại tuyến"}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="py-6 text-center">
+                                <p className="text-slate-400 text-xs mb-3">Chưa có bạn bè trong danh sách.</p>
+                            </div>
+                        )}
+
+                        {/* Phần Gợi ý kết bạn & Trạng thái hoạt động ở đáy sidebar */}
+                        <div className="pt-4 border-t border-slate-200 mt-2 shrink-0">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center space-x-1.5">
+                                    <Sparkles className="w-4 h-4 text-amber-500" />
+                                    <h4 className="font-bold text-slate-800 text-xs">Gợi ý kết bạn</h4>
+                                </div>
+                                {onlineCount > 0 && (
+                                    <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                        {onlineCount} online
+                                    </span>
+                                )}
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                                <p className="text-[11px] text-slate-600 leading-relaxed">
+                                    {onlineCount > 0 
+                                        ? `Đang có ${onlineCount} bạn bè trực tuyến sẵn sàng trò chuyện!` 
+                                        : "Khám phá thêm những người bạn mới trên SocialHub."}
+                                </p>
+                                <Link
+                                    to="/friends"
+                                    className="flex items-center justify-center space-x-1.5 w-full bg-white hover:bg-blue-50 text-blue-600 border border-blue-200 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm cursor-pointer"
+                                >
+                                    <UserPlus className="w-3.5 h-3.5" />
+                                    <span>Tìm bạn mới</span>
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </aside>
 

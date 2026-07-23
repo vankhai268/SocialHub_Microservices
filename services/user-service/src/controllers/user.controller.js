@@ -18,7 +18,7 @@ export const getUserById = async (req, res) => {
         }
 
         const userResult = await pool.query(
-            'SELECT id, email, display_name as "displayName", bio, avatar_url as "avatarUrl", created_at as "createdAt" FROM users WHERE id = $1',
+            'SELECT id, email, display_name as "displayName", bio, avatar_url as "avatarUrl", cover_url as "coverUrl", created_at as "createdAt", updated_at as "updatedAt", COALESCE(last_login, updated_at, created_at) as "lastLogin" FROM users WHERE id = $1',
             [id]
         );
 
@@ -50,7 +50,7 @@ export const getUserById = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
     const { id } = req.params;
-    const { name, bio, avatarUrl } = req.body;
+    const { name, bio, avatarUrl, coverUrl } = req.body;
 
     if (req.user.id !== id) {
         return res.status(403).json({
@@ -65,9 +65,10 @@ export const updateProfile = async (req, res) => {
             SET display_name = COALESCE($1, display_name),
                 bio = COALESCE($2, bio),
                 avatar_url = COALESCE($3, avatar_url),
+                cover_url = COALESCE($4, cover_url),
                 updated_at = NOW()
-            WHERE id = $4
-            RETURNING id, email, display_name as "displayName", bio, avatar_url as "avatarUrl", created_at as "createdAt"
+            WHERE id = $5
+            RETURNING id, email, display_name as "displayName", bio, avatar_url as "avatarUrl", cover_url as "coverUrl", created_at as "createdAt", updated_at as "updatedAt", COALESCE(last_login, updated_at, created_at) as "lastLogin"
         `;
 
         const result = await pool.query(
@@ -76,6 +77,7 @@ export const updateProfile = async (req, res) => {
                 name !== undefined ? name : null,
                 bio !== undefined ? bio : null,
                 avatarUrl !== undefined ? avatarUrl : null,
+                coverUrl !== undefined ? coverUrl : null,
                 id
             ]
         );

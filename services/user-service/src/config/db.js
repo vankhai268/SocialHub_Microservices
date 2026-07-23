@@ -39,6 +39,9 @@ const initDbSql = `
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_users_display_name ON users(display_name);
   CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
+
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS cover_url VARCHAR(2083);
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();
 `;
 
 export const initDatabase = async () => {

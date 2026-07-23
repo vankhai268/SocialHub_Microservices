@@ -7,15 +7,16 @@ import EditPostModal from "./EditPostModal";
 import ImageLightboxModal from "./ImageLightboxModal";
 import HlsVideoPlayer from "./HlsVideoPlayer";
 import { useAuth } from "../context/AuthContext"; // <-- Import useAuth
+import { formatRelativeTime } from "../utils/dateUtils";
 
 const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpdated }) => {
     const { user: currentUser } = useAuth(); // Lấy thông tin user hiện tại
     const [showEditModal, setShowEditModal] = useState(false);
     const [lightboxData, setLightboxData] = useState(null); // { items: [...], index: 0 }
     const [isLiked, setIsLiked] = useState(post.isLikedByMe || false);
-    const [likeCount, setLikeCount] = useState(post.like_count || 0);
-    const [commentCount, setCommentCount] = useState(post.comment_count || 0);
-    const [shareCount, setShareCount] = useState(post.share_count || 0);
+    const [likeCount, setLikeCount] = useState(post.like_count ?? post.likeCount ?? 0);
+    const [commentCount, setCommentCount] = useState(post.comment_count ?? post.commentCount ?? 0);
+    const [shareCount, setShareCount] = useState(post.share_count ?? post.shareCount ?? 0);
     const [imageUrl, setImageUrl] = useState("");
     const [isLoadingImage, setIsLoadingImage] = useState(false);
 
@@ -394,7 +395,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                         <Link to={`/profile/${post.author_id}`} className="font-semibold text-slate-800 text-sm hover:text-blue-600 transition">
                             {post.author?.displayName || "Người dùng SocialHub"}
                         </Link>
-                        <p className="text-xs text-slate-500 mt-0.5">{new Date(post.created_at || post.createdAt).toLocaleString()}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{formatRelativeTime(post.created_at || post.createdAt)}</p>
                     </div>
                 </div>
 
@@ -471,7 +472,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                                     <Link to={`/profile/${originalPost.author_id}`} className="font-semibold text-slate-800 text-xs hover:text-blue-600 transition">
                                         {originalPost.author?.displayName}
                                     </Link>
-                                    <p className="text-[10px] text-slate-500 mt-0.5">{new Date(originalPost.created_at || originalPost.createdAt).toLocaleString()}</p>
+                                    <p className="text-[10px] text-slate-500 mt-0.5">{formatRelativeTime(originalPost.created_at || originalPost.createdAt)}</p>
                                 </div>
                             </div>
                             {/* Nội dung chữ bài gốc */}
@@ -517,7 +518,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                     className={`flex items-center justify-center space-x-1.5 sm:space-x-2 py-2 px-3 sm:px-4 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition cursor-pointer active:scale-95 ${isLiked ? "text-rose-600 font-bold bg-rose-50/50" : ""}`}
                 >
                     <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isLiked ? "fill-rose-600" : ""}`} />
-                    <span>{likeCount} <span className="hidden sm:inline">Thích</span></span>
+                    <span>{likeCount} <span className="inline">Thích</span></span>
                 </button>
 
                 {/* Nút Bình luận */}
@@ -526,7 +527,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                     className={`flex items-center justify-center space-x-1.5 sm:space-x-2 py-2 px-3 sm:px-4 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition cursor-pointer active:scale-95 ${showComments ? "text-blue-600 font-bold bg-blue-50/50" : ""}`}
                 >
                     <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>{commentCount} <span className="hidden sm:inline">Bình luận</span></span>
+                    <span>{commentCount} <span className="inline">Bình luận</span></span>
                 </button>
 
                 {/* Nút Chia sẻ */}
@@ -535,7 +536,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                     className="flex items-center justify-center space-x-1.5 sm:space-x-2 py-2 px-3 sm:px-4 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition cursor-pointer active:scale-95"
                 >
                     <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span>{shareCount} <span className="hidden sm:inline">Chia sẻ</span></span>
+                    <span>{shareCount} <span className="inline">Chia sẻ</span></span>
                 </button>
             </div>
 
@@ -608,7 +609,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                                                     <div>
                                                         <div className="flex items-center space-x-2">
                                                             <span className="font-bold text-slate-800 text-xs">{parentComment.author?.displayName}</span>
-                                                            <span className="text-[10px] text-slate-500">{new Date(parentComment.created_at || parentComment.createdAt).toLocaleString()}</span>
+                                                            <span className="text-[10px] text-slate-500">{formatRelativeTime(parentComment.created_at || parentComment.createdAt)}</span>
                                                         </div>
                                                         <p className="text-slate-600 text-xs mt-1 leading-relaxed whitespace-pre-wrap">
                                                             {parentComment.parsedInfo?.mentionName ? (
@@ -660,7 +661,7 @@ const PostCard = ({ post, currentUserId, onPostShared, onPostDeleted, onPostUpda
                                                             <div>
                                                                 <div className="flex items-center space-x-2">
                                                                     <span className="font-bold text-slate-800 text-xs">{reply.author?.displayName}</span>
-                                                                    <span className="text-[10px] text-slate-500">{new Date(reply.created_at || reply.createdAt).toLocaleString()}</span>
+                                                                    <span className="text-[10px] text-slate-500">{formatRelativeTime(reply.created_at || reply.createdAt)}</span>
                                                                 </div>
                                                                 <p className="text-slate-600 text-xs mt-1 leading-relaxed whitespace-pre-wrap">
                                                                     {reply.parsedInfo?.mentionName ? (

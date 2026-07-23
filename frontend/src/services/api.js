@@ -1,17 +1,84 @@
 import axios from "axios";
 
-const getBaseURL = () => {
-    const rawUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
-    return rawUrl.endsWith('/api') ? rawUrl : `${rawUrl}/api`;
+const LOCAL_BASE = "http://localhost:8080";
+const CLOUD_BASE = import.meta.env.VITE_CLOUD_API_URL || "https://api-local.socialhubzz.cloud";
+
+let currentOrigin = LOCAL_BASE;
+let isCheckingHealth = false;
+
+const getApiUrl = (origin) => {
+    return origin.endsWith('/api') ? origin : `${origin}/api`;
 };
 
 const api = axios.create({
-    baseURL: getBaseURL(),
+    baseURL: getApiUrl(currentOrigin),
+    timeout: 10000,
     headers: {
         "Content-Type": "application/json",
         "ngrok-skip-browser-warning": "any-value"
     }
-})
+});
+
+// Hàm chuyển đổi server linh hoạt giữa Local 8080 và Cloud Tunnel
+export const switchServer = (newOrigin) => {
+    if (currentOrigin === newOrigin) return;
+    currentOrigin = newOrigin;
+    api.defaults.baseURL = getApiUrl(newOrigin);
+    console.warn(`🔄 [API ROUTER] Đã chuyển đổi kết nối API Gateway sang: ${newOrigin}`);
+    window.dispatchEvent(new CustomEvent("server-switched", { detail: newOrigin }));
+};
+
+// 🌟 THUẬT TOÁN HEALTH CHECK PING CHUẨN XÁC 100%:
+// Chỉ chuyển vùng server khi Ping thực tế tới endpoint /health thất bại (Server down hẳn).
+// Ứng dụng sẽ không bao giờ bị nhảy nhầm server do lỗi API 401, 404, hay 500.
+export const checkServerHealth = async () => {
+    if (isCheckingHealth) return;
+    isCheckingHealth = true;
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+        // Ping kiểm tra tín hiệu trực tiếp tới Gateway Localhost 8080
+        const res = await fetch(`${LOCAL_BASE}/health`, {
+            method: "GET",
+            signal: controller.signal,
+            headers: { "ngrok-skip-browser-warning": "any-value" }
+        }).catch(() => null);
+
+        clearTimeout(timeoutId);
+
+        if (res && (res.status === 200 || res.ok)) {
+            // Localhost hoạt động bình thường -> Giữ/Chuyển về Localhost 8080
+            if (currentOrigin !== LOCAL_BASE) {
+                console.log("✅ [HEALTH CHECK] Đã phát hiện Localhost 8080 hoạt động! Chuyển lại về Localhost.");
+                switchServer(LOCAL_BASE);
+            }
+        } else {
+            // Localhost không phản hồi (Docker tắt/chưa chạy xong) -> Tạm thời dùng Cloud Server
+            if (currentOrigin !== CLOUD_BASE) {
+                console.warn("⚠️ [HEALTH CHECK] Localhost 8080 không phản hồi. Tự động chuyển sang Cloud Server dự phòng...");
+                switchServer(CLOUD_BASE);
+            }
+        }
+    } catch (err) {
+        if (currentOrigin !== CLOUD_BASE) {
+            switchServer(CLOUD_BASE);
+        }
+    } finally {
+        isCheckingHealth = false;
+    }
+};
+
+// Kích hoạt Ping kiểm tra tín hiệu ngay khi nạp trang
+checkServerHealth();
+
+// Chạy lại Ping định kỳ mỗi 8s nếu đang ở Cloud Server để tự động về lại Localhost ngay khi Docker khởi động xong
+setInterval(() => {
+    if (currentOrigin !== LOCAL_BASE) {
+        checkServerHealth();
+    }
+}, 8000);
 
 api.interceptors.request.use(
     (config) => {
@@ -19,12 +86,8 @@ api.interceptors.request.use(
         if (token) {
             config.headers["Authorization"] = `Bearer ${token}`;
         }
-        // Luôn đảm bảo header bypass ngrok warning tồn tại trong MỌI request
-        // (kể cả multipart/form-data vì headers object có thể bị override)
         config.headers["ngrok-skip-browser-warning"] = "any-value";
 
-        // Nếu gửi FormData (upload file), ta cần xóa Content-Type mặc định (application/json)
-        // để trình duyệt tự động thiết lập Content-Type kèm boundary chính xác.
         if (config.data instanceof FormData) {
             delete config.headers["Content-Type"];
         }
@@ -49,36 +112,26 @@ const resolveUrls = (obj) => {
             if (typeof val === "string") {
                 const lowerKey = key.toLowerCase();
                 if ((lowerKey === "avatarurl" || lowerKey === "avatar_url") && val) {
-                    // Bỏ qua blob URLs (ảnh local đã được tạo từ URL.createObjectURL)
-                    if (val.startsWith("blob:")) {
-                        continue;
-                    }
+                    if (val.startsWith("blob:")) continue;
 
                     let resolvedUrl = val;
                     if (!val.startsWith("http")) {
                         const cleanVal = val.startsWith("/") ? val : `/${val}`;
                         resolvedUrl = `${api.defaults.baseURL}${cleanVal}`;
                     } else {
-                        // Nếu đang chạy trên production (Vercel) nhưng avatarUrl chứa localhost hoặc domain trycloudflare/ngrok cũ trong DB, chuyển đổi về gateway đúng
                         try {
-                            const currentOrigin = new URL(api.defaults.baseURL).origin;
+                            const activeOrigin = new URL(api.defaults.baseURL).origin;
                             const urlObj = new URL(val);
-                            if (urlObj.origin !== currentOrigin && val.includes("/media/file/")) {
+                            if (urlObj.origin !== activeOrigin && val.includes("/media/file/")) {
                                 const mediaId = val.split("/media/file/").pop().split("?")[0];
                                 resolvedUrl = `${api.defaults.baseURL}/media/file/${mediaId}`;
                             }
-                        } catch (e) {
-                            // Bỏ qua nếu url không đúng định dạng
-                        }
+                        } catch (e) {}
                     }
 
-                    // Thêm tham số thời gian để tránh trình duyệt cache ảnh đại diện
-                    // (chỉ áp dụng cho URL server, không phải blob URL)
                     if (!resolvedUrl.includes(`t=`)) {
                         resolvedUrl += (resolvedUrl.includes("?") ? "&" : "?") + `t=${Date.now()}`;
                     }
-
-                    console.log(`[AVATAR_RESOLVER] Key: "${key}", Original: "${val}", Resolved: "${resolvedUrl}"`);
 
                     obj[key] = resolvedUrl;
                 }
@@ -90,7 +143,7 @@ const resolveUrls = (obj) => {
     return obj;
 };
 
-// 2. Response Interceptor: Tự động giải quyết URL ảnh đại diện và làm mới Token khi nhận lỗi 401
+// Response Interceptor: Xử lý Refresh Token 401 & Health Ping khi gặp lỗi mạng
 api.interceptors.response.use(
     (response) => {
         if (response.data) {
@@ -102,14 +155,24 @@ api.interceptors.response.use(
         const originalRequest = error.config;
         if (!originalRequest) return Promise.reject(error);
 
-        // Kiểm tra xem request có phải là request xác thực không
+        // Khi gặp lỗi mạng (ERR_NETWORK), tự động kích hoạt Health Check để kiểm tra xem Localhost có bị tắt không
+        const isNetworkError = !error.response || error.code === "ERR_NETWORK" || error.code === "ECONNABORTED";
+        if (isNetworkError && !originalRequest._healthChecked) {
+            originalRequest._healthChecked = true;
+            await checkServerHealth();
+            if (originalRequest.baseURL !== api.defaults.baseURL) {
+                originalRequest.baseURL = api.defaults.baseURL;
+                return api(originalRequest);
+            }
+        }
+
+        // Xử lý refresh token khi bị lỗi 401 (Hết hạn token)
         const isAuthRequest = originalRequest.url && (
             originalRequest.url.includes("/auth/login") ||
             originalRequest.url.includes("/auth/refresh") ||
             originalRequest.url.includes("/auth/register")
         );
 
-        // Chỉ cố gắng refresh token cho các request KHÔNG phải xác thực bị lỗi 401
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthRequest) {
             originalRequest._retry = true;
             try {
@@ -122,8 +185,7 @@ api.interceptors.response.use(
                     return Promise.reject(error);
                 }
 
-                // Gọi API refresh token
-                const res = await axios.post(`${getBaseURL()}/auth/refresh`, {
+                const res = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {
                     refreshToken,
                 }, {
                     headers: {
@@ -132,18 +194,13 @@ api.interceptors.response.use(
                 });
                 if (res.data && res.data.success) {
                     const { accessToken: newAccess, refreshToken: newRefresh } = res.data.tokens;
-
-                    // Lưu token mới vào LocalStorage
                     localStorage.setItem("accessToken", newAccess);
                     localStorage.setItem("refreshToken", newRefresh);
-
-                    // Cập nhật token mới vào request bị lỗi trước đó và chạy lại
                     originalRequest.headers["Authorization"] = `Bearer ${newAccess}`;
                     return api(originalRequest);
                 }
             } catch (refreshError) {
                 console.error("🔒 Hết hạn phiên đăng nhập (Refresh token expired):", refreshError);
-                // Xóa token và buộc logout
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem("refreshToken");
                 if (window.location.pathname !== "/login") {
@@ -154,4 +211,5 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
 export default api;
