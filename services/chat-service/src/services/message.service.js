@@ -49,7 +49,7 @@ export const getMessages = async (userId, conversationId, before = null, limit =
   // Populate presigned URLs for image type messages on the fly
   const resolvedMessages = await Promise.all(messages.map(async (msg) => {
     const msgJson = msg.toJSON();
-    if (msgJson.type === 'image' && msgJson.mediaId) {
+    if ((msgJson.type === 'image' || msgJson.type === 'audio') && msgJson.mediaId) {
       const mediaUrl = await fetchMediaUrl(msgJson.mediaId, token);
       msgJson.mediaUrl = mediaUrl;
     }

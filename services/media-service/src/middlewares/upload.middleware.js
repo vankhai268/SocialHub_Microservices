@@ -4,18 +4,31 @@ import { BadRequestError } from '../utils/error.js';
 
 const storage = multer.memoryStorage();
 
+const ALLOWED_AUDIO_TYPES = [
+  'audio/webm',
+  'audio/wav',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/mp3',
+  'audio/mp4',
+  'audio/aac',
+  'audio/m4a',
+  'audio/x-m4a'
+];
+
 const fileFilter = (req, file, cb) => {
   const isImage = config.ALLOWED_IMAGE_TYPES.includes(file.mimetype);
   const isVideo = config.ALLOWED_VIDEO_TYPES.includes(file.mimetype);
+  const isAudio = ALLOWED_AUDIO_TYPES.includes(file.mimetype) || file.mimetype.startsWith('audio/');
 
-  if (isImage || isVideo) {
+  if (isImage || isVideo || isAudio) {
     // Gắn loại file vào request để controller biết xử lý thế nào
-    req.fileCategory = isImage ? 'image' : 'video';
+    req.fileCategory = isImage ? 'image' : isVideo ? 'video' : 'audio';
     cb(null, true);
   } else {
     cb(new BadRequestError(
       `Invalid file type: ${file.mimetype}. ` +
-      `Allowed: JPG, PNG, GIF, WEBP (image) | MP4, WEBM, MOV, AVI (video).`
+      `Allowed: JPG, PNG, GIF, WEBP (image) | MP4, WEBM, MOV, AVI (video) | WEBM, WAV, MP3, M4A, AAC (audio).`
     ));
   }
 };

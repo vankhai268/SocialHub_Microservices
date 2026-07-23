@@ -35,7 +35,7 @@ const MessageSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['text', 'image', 'share'],
+    enum: ['text', 'image', 'share', 'audio'],
     default: 'text'
   },
   mediaId: {

@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useSocket } from "../context/SocketContext";
-import { X, Send, Loader, Image, Phone, Video } from "lucide-react";
+import { X, Send, Loader, Image, Phone, Video, Mic } from "lucide-react";
+import VoiceMessagePlayer from "./chat/VoiceMessagePlayer";
+import VoiceRecorder from "./chat/VoiceRecorder";
 
 // Component con tải hình ảnh an toàn thông qua Axios (hỗ trợ headers như Authorization và ngrok-skip-browser-warning)
 const ChatImage = ({ mediaId }) => {
@@ -151,6 +153,7 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
     const fileInputRef = useRef(null);
 
     const conversationId = conversation._id || conversation.id;
@@ -300,6 +303,40 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                     break;
                 }
             }
+        }
+    };
+
+    // 4e. Gửi tin nhắn thoại (Voice Message)
+    const handleSendVoice = async (audioBlob, duration) => {
+        if (!chatSocket) return;
+        setIsRecording(false);
+        setIsSubmitting(true);
+        try {
+            // Đóng gói blob âm thanh thành File đối tượng để upload
+            const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: "audio/webm" });
+            const formData = new FormData();
+            formData.append("file", file);
+
+            // Upload audio lên media-service
+            const res = await api.post("/media/upload", formData, {
+                headers: { "Content-Type": "multipart/form-data" }
+            });
+
+            const mId = res.data?.id;
+            if (mId) {
+                // Gửi tin nhắn thoại qua WebSocket dạng type: "audio"
+                chatSocket.emit("message:send", {
+                    conversationId,
+                    content: String(duration || 0),
+                    type: "audio",
+                    mediaId: mId
+                });
+            }
+        } catch (err) {
+            console.error("❌ Lỗi gửi tin nhắn thoại:", err.message);
+            alert("Không thể gửi tin nhắn thoại. Vui lòng thử lại!");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -460,6 +497,8 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                                                 </div>
                                             )}
                                         </div>
+                                    ) : msg.type === "audio" && (msg.mediaUrl || msg.mediaId) ? (
+                                        <VoiceMessagePlayer src={msg.mediaUrl} mediaId={msg.mediaId} durationProp={!isNaN(parseInt(msg.content)) ? parseInt(msg.content) : 0} isMe={isMe} />
                                     ) : msg.type === "share" ? (
                                         <RenderShareMessage msgContent={msg.content} isMe={isMe} onNavigate={navigate} />
                                     ) : (
@@ -513,46 +552,64 @@ const ChatBox = ({ conversation, onClose, currentUserId }) => {
                     </div>
                 )}
 
-                <div className="flex items-center space-x-2">
-                    {/* Nút đính kèm ảnh */}
-                    <input
-                        type="file"
-                        accept="image/*"
-                        ref={fileInputRef}
-                        onChange={handleImageChange}
-                        className="hidden"
+                {isRecording ? (
+                    <VoiceRecorder
+                        onSend={handleSendVoice}
+                        onCancel={() => setIsRecording(false)}
                     />
-                    <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isSubmitting}
-                        className="p-2 bg-white border border-slate-200 hover:bg-slate-100 hover:border-blue-600 text-slate-500 hover:text-blue-600 rounded-xl transition cursor-pointer disabled:opacity-50"
-                        title="Đính kèm ảnh"
-                    >
-                        <Image className="w-4 h-4" />
-                    </button>
+                ) : (
+                    <div className="flex items-center space-x-2 w-full">
+                        {/* Nút đính kèm ảnh */}
+                        <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileInputRef}
+                            onChange={handleImageChange}
+                            className="hidden"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isSubmitting}
+                            className="p-2 bg-white border border-slate-200 hover:bg-slate-100 hover:border-blue-600 text-slate-500 hover:text-blue-600 rounded-xl transition cursor-pointer disabled:opacity-50"
+                            title="Đính kèm ảnh"
+                        >
+                            <Image className="w-4 h-4" />
+                        </button>
 
-                    <input
-                        type="text"
-                        value={inputText}
-                        onChange={handleInputChange}
-                        onPaste={handleInputPaste}
-                        placeholder={isSubmitting ? "Đang gửi..." : "Aa..."}
-                        disabled={isSubmitting}
-                        className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition disabled:opacity-50"
-                    />
-                    <button
-                        type="submit"
-                        disabled={isSubmitting || (!inputText.trim() && !imageFile)}
-                        className="p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition cursor-pointer"
-                    >
-                        {isSubmitting ? (
-                            <Loader className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <Send className="w-4 h-4" />
-                        )}
-                    </button>
-                </div>
+                        {/* Nút ghi âm tin nhắn thoại */}
+                        <button
+                            type="button"
+                            onClick={() => setIsRecording(true)}
+                            disabled={isSubmitting}
+                            className="p-2 bg-white border border-slate-200 hover:bg-slate-100 hover:border-blue-600 text-slate-500 hover:text-blue-600 rounded-xl transition cursor-pointer disabled:opacity-50"
+                            title="Ghi âm tin nhắn thoại"
+                        >
+                            <Mic className="w-4 h-4" />
+                        </button>
+
+                        <input
+                            type="text"
+                            value={inputText}
+                            onChange={handleInputChange}
+                            onPaste={handleInputPaste}
+                            placeholder={isSubmitting ? "Đang gửi..." : "Aa..."}
+                            disabled={isSubmitting}
+                            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition disabled:opacity-50"
+                        />
+                        <button
+                            type="submit"
+                            disabled={isSubmitting || (!inputText.trim() && !imageFile)}
+                            className="p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition cursor-pointer"
+                        >
+                            {isSubmitting ? (
+                                <Loader className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Send className="w-4 h-4" />
+                            )}
+                        </button>
+                    </div>
+                )}
             </form>
         </div>
     );

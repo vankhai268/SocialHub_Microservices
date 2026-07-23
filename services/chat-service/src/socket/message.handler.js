@@ -34,9 +34,9 @@ export default (io, socket) => {
         return socket.emit('error', { message: 'Not authorized to send messages in this conversation' });
       }
 
-      // Fetch presigned URL if type is image and mediaId exists
+      // Fetch presigned URL if type is image/audio and mediaId exists
       let mediaUrl = null;
-      if (type === 'image' && mediaId) {
+      if ((type === 'image' || type === 'audio') && mediaId) {
         mediaUrl = await fetchMediaUrl(mediaId, socket.token);
       }
 
@@ -46,7 +46,7 @@ export default (io, socket) => {
         senderId: userId,
         senderName: socket.displayName,
         senderAvatar: socket.avatarUrl,
-        content: content || 'Sent an image',
+        content: content || (type === 'audio' ? 'Đã gửi một tin nhắn thoại 🎤' : 'Sent an image'),
         type,
         mediaId,
         mediaUrl,
@@ -55,7 +55,7 @@ export default (io, socket) => {
 
       // Update Conversation's lastMessage for list previews
       conversation.lastMessage = {
-        content: type === 'image' ? 'Sent an image' : type === 'share' ? 'Đã chia sẻ một bài viết' : content.substring(0, 100),
+        content: type === 'image' ? 'Sent an image' : type === 'audio' ? 'Đã gửi một tin nhắn thoại 🎤' : type === 'share' ? 'Đã chia sẻ một bài viết' : content.substring(0, 100),
         senderId: userId,
         senderName: socket.displayName,
         createdAt: message.createdAt

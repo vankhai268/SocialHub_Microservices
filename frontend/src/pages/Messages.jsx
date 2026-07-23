@@ -21,13 +21,17 @@ import {
     Trash2,
     MessageSquarePlus,
     UserPlus,
-    ArrowLeft
+    ArrowLeft,
+    Mic
 } from "lucide-react";
+import VoiceMessagePlayer from "../components/chat/VoiceMessagePlayer";
+import VoiceRecorder from "../components/chat/VoiceRecorder";
 
 const formatLastMessagePreview = (lastMsg) => {
     if (!lastMsg) return "Chưa có tin nhắn...";
     if (lastMsg.type === "image") return "[Đã gửi 1 hình ảnh 📷]";
     if (lastMsg.type === "video") return "[Đã gửi 1 video 🎥]";
+    if (lastMsg.type === "audio") return "[Đã gửi 1 tin nhắn thoại 🎤]";
     const content = lastMsg.content || "";
     if (content.trim().startsWith("{") && content.includes('"postId"')) {
         try {
@@ -66,6 +70,8 @@ const Messages = () => {
     // Multi-file media attachments & Lightbox Modal
     const [selectedFiles, setSelectedFiles] = useState([]); // [{ id, file, previewUrl, isVideo }]
     const [isSending, setIsSending] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const activeLightboxRef = useRef(null); // for lightbox
     const [activeLightboxUrl, setActiveLightboxUrl] = useState(null);
 
     const handleOpenLightbox = async (mId) => {
@@ -298,6 +304,38 @@ const Messages = () => {
                     break;
                 }
             }
+        }
+    };
+
+    // 4e. Gửi tin nhắn thoại (Voice Message)
+    const handleSendVoice = async (audioBlob, duration) => {
+        if (!selectedConv || !chatSocket) return;
+        const cId = selectedConv._id || selectedConv.id;
+        setIsRecording(false);
+        setIsSending(true);
+        try {
+            const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: "audio/webm" });
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const res = await api.post("/media/upload", formData, {
+                headers: { "Content-Type": "multipart/form-data" }
+            });
+
+            const mId = res.data?.id;
+            if (mId) {
+                chatSocket.emit("message:send", {
+                    conversationId: cId,
+                    content: String(duration || 0),
+                    type: "audio",
+                    mediaId: mId
+                });
+            }
+        } catch (err) {
+            console.error("❌ Lỗi gửi tin nhắn thoại:", err.message);
+            alert("Không thể gửi tin nhắn thoại. Vui lòng thử lại!");
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -719,6 +757,8 @@ const Messages = () => {
                                                             </div>
                                                         )}
                                                     </div>
+                                                ) : msg.type === "audio" && (msg.mediaUrl || msg.mediaId) ? (
+                                                    <VoiceMessagePlayer src={msg.mediaUrl} mediaId={msg.mediaId} durationProp={!isNaN(parseInt(msg.content)) ? parseInt(msg.content) : 0} isMe={isMe} />
                                                 ) : msg.type === "share" ? (
                                                     <RenderShareMessage msgContent={msg.content} isMe={isMe} onNavigate={navigate} />
                                                 ) : (
@@ -769,44 +809,62 @@ const Messages = () => {
                             )}
 
                             {/* Khung thanh công cụ và ô gõ nội dung */}
-                            <div className="flex items-center space-x-2">
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-blue-600 rounded-2xl transition cursor-pointer shrink-0"
-                                >
-                                    <ImageIcon className="w-5 h-5" />
-                                </button>
-                                <input
-                                    type="file"
-                                    multiple
-                                    ref={fileInputRef}
-                                    onChange={handleFilesChange}
-                                    accept="image/*,video/*"
-                                    className="hidden"
+                            {isRecording ? (
+                                <VoiceRecorder
+                                    onSend={handleSendVoice}
+                                    onCancel={() => setIsRecording(false)}
                                 />
+                            ) : (
+                                <div className="flex items-center space-x-2 w-full">
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-blue-600 rounded-2xl transition cursor-pointer shrink-0"
+                                        title="Đính kèm tệp"
+                                    >
+                                        <ImageIcon className="w-5 h-5" />
+                                    </button>
+                                    <input
+                                        type="file"
+                                        multiple
+                                        ref={fileInputRef}
+                                        onChange={handleFilesChange}
+                                        accept="image/*,video/*"
+                                        className="hidden"
+                                    />
 
-                                <input
-                                    type="text"
-                                    value={inputText}
-                                    onChange={(e) => setInputText(e.target.value)}
-                                    onPaste={handleInputPaste}
-                                    placeholder="Nhập tin nhắn..."
-                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition"
-                                />
+                                    {/* Nút ghi âm tin nhắn thoại */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsRecording(true)}
+                                        className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-blue-600 rounded-2xl transition cursor-pointer shrink-0"
+                                        title="Ghi âm tin nhắn thoại"
+                                    >
+                                        <Mic className="w-5 h-5" />
+                                    </button>
 
-                                <button
-                                    type="submit"
-                                    disabled={isSending || (!inputText.trim() && selectedFiles.length === 0)}
-                                    className="p-3 bg-blue-600 disabled:opacity-50 hover:bg-blue-700 text-white rounded-2xl transition cursor-pointer shrink-0 shadow-md shadow-blue-600/20"
-                                >
-                                    {isSending ? (
-                                        <Loader className="w-5 h-5 animate-spin" />
-                                    ) : (
-                                        <Send className="w-5 h-5" />
-                                    )}
-                                </button>
-                            </div>
+                                    <input
+                                        type="text"
+                                        value={inputText}
+                                        onChange={(e) => setInputText(e.target.value)}
+                                        onPaste={handleInputPaste}
+                                        placeholder="Nhập tin nhắn..."
+                                        className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition"
+                                    />
+
+                                    <button
+                                        type="submit"
+                                        disabled={isSending || (!inputText.trim() && selectedFiles.length === 0)}
+                                        className="p-3 bg-blue-600 disabled:opacity-50 hover:bg-blue-700 text-white rounded-2xl transition cursor-pointer shrink-0 shadow-md shadow-blue-600/20"
+                                    >
+                                        {isSending ? (
+                                            <Loader className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <Send className="w-5 h-5" />
+                                        )}
+                                    </button>
+                                </div>
+                            )}
                         </form>
                     </>
                 ) : (
